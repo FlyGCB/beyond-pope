@@ -1,0 +1,11 @@
+{
+  "model": "deepseekvl2_small",
+  "benchmark": "pope_random",
+  "n_total": 3000,
+  "n_valid": 3000,
+  "n_unknown": 0,
+  "accuracy": 0.5,
+  "yes_rate": 0.0,
+  "latency_mean_ms": 1484.5,
+  "wall_time_s": 5187.2
+}
