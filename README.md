@@ -21,12 +21,31 @@ A research project demonstrating that POPE — the most widely used VLM hallucin
 
 | Model | Parameters | Source |
 |---|---|---|
-| Qwen2.5-VL | 7B | Qwen/Qwen2-VL-7B-Instruct |
+| Qwen2-VL | 7B | Qwen/Qwen2-VL-7B-Instruct |
 | InternVL2.5 | 8B | OpenGVLab/InternVL2_5-8B |
 | LLaVA-OneVision | 7B | lmms-lab/llava-onevision-qwen2-7b-ov |
 | Llama-3.2-Vision | 11B | meta-llama/Llama-3.2-11B-Vision-Instruct |
 | PaliGemma2 | 3B | google/paligemma2-3b-pt-448 |
-| Idefics3 | 8B | HuggingFaceM4/Idefics3-8B-Llama3 |
+| DeepSeekVL2-Small | ~3B | deepseek-ai/deepseek-vl2-small |
+
+---
+
+## Preliminary Results (POPE Adversarial)
+
+Results on the hardest POPE split (`pope_adversarial`, n=3000). Models with yes_rate ≈ 0% failed to produce valid Yes/No responses and their accuracy scores reflect the 50% random baseline — not genuine comprehension.
+
+| Model | Accuracy | Yes Rate | Latency (ms) | Status |
+|---|---|---|---|---|
+| llava_ov_7b | **87.8%** | 43.5% | 784 | ✅ Valid |
+| llama32v_11b | 83.6% | 56.8% | 846 | ✅ Valid |
+| internvl2_8b | 83.0% | 58.3% | 312 | ✅ Valid |
+| qwen2vl_7b | 51.2% | 4.3% | 345 | ⚠️ Parser issue |
+| paligemma2_3b | 50.0% | ~0% | 201 | ⚠️ Parser issue |
+| deepseekvl2_small | 50.0% | 0.0% | 1436 | ⚠️ Parser issue |
+
+> **Note**: `qwen2vl_7b`, `paligemma2_3b`, and `deepseekvl2_small` produced near-zero yes_rate, indicating their outputs were not parsed as valid Yes/No answers. Accuracy at ~50% reflects the label distribution, not model performance. Answer parser fixes are pending before these results are interpretable.
+
+DeepSeekVL2-Small also shows substantially higher latency (~1436 ms/sample) compared to similarly-sized models, suggesting inference inefficiency that warrants investigation.
 
 ---
 
@@ -42,7 +61,7 @@ beyond-pope/
 │   │   ├── llava_ov.py
 │   │   ├── llama32v.py
 │   │   ├── paligemma2.py
-│   │   ├── idefics3.py
+│   │   ├── deepseekvl2.py
 │   │   ├── __init__.py      MODEL_REGISTRY + get_model()
 │   │   └── run_inference.py CLI entry point
 │   │
@@ -145,7 +164,9 @@ wget -P data/raw/vg https://homes.cs.washington.edu/~ranjay/visualgenome/data/da
 cd data/raw/vg && unzip "*.zip"
 
 # Build X-POPE splits
-python -m src.dataset.build_xpope     --vg-dir data/raw/vg     --output-dir data/processed
+python -m src.dataset.build_xpope \
+    --vg-dir data/raw/vg \
+    --output-dir data/processed
 ```
 
 ---
@@ -180,15 +201,23 @@ bash src/experiments/run_module4.sh
 
 ### Single model, single benchmark
 ```bash
-python -m src.models.run_inference     --model qwen2vl_7b     --benchmark pope_adversarial     --image-dir data/raw/coco/val2014
+python -m src.models.run_inference \
+    --model qwen2vl_7b \
+    --benchmark pope_adversarial \
+    --image-dir data/raw/coco/val2014
 
 # With 4-bit quantization (saves ~8GB VRAM)
-python -m src.models.run_inference     --model qwen2vl_7b     --benchmark pope_adversarial     --image-dir data/raw/coco/val2014     --load-in-4bit
+python -m src.models.run_inference \
+    --model qwen2vl_7b \
+    --benchmark pope_adversarial \
+    --image-dir data/raw/coco/val2014 \
+    --load-in-4bit
 ```
 
 ### All models, all benchmarks
 ```bash
-python -m src.models.run_inference --model all --benchmark all     --image-dir data/raw/coco/val2014
+python -m src.models.run_inference --model all --benchmark all \
+    --image-dir data/raw/coco/val2014
 ```
 
 ---
@@ -213,13 +242,15 @@ reports = batch_evaluate("results/predictions/")
 
 ```bash
 # Ranking shift (Spearman rho)
-python -m src.analysis.ranking_shift results/predictions/     --benchmarks pope_adversarial repope_adversarial dashb_adversarial
+python -m src.analysis.ranking_shift results/predictions/ \
+    --benchmarks pope_adversarial repope_adversarial dashb_adversarial
 
 # Yes-bias distribution
 python -m src.analysis.bias_analysis results/predictions/ --json > reports/bias.json
 
 # CV saturation diagnostics
-python -m src.analysis.saturation_diag results/predictions/     --benchmarks pope_adversarial dashb_adversarial
+python -m src.analysis.saturation_diag results/predictions/ \
+    --benchmarks pope_adversarial dashb_adversarial
 ```
 
 ---
@@ -228,13 +259,16 @@ python -m src.analysis.saturation_diag results/predictions/     --benchmarks pop
 
 ```bash
 # Radar chart (X-POPE three dimensions)
-python -m src.viz.plot_radar reports/module4_radar_input.json     --output figures/radar_xpope.png
+python -m src.viz.plot_radar reports/module4_radar_input.json \
+    --output figures/radar_xpope.png
 
 # Bump chart (ranking shift)
-python -m src.viz.plot_ranking reports/module3_ranking.json     --output figures/bump_ranking.png
+python -m src.viz.plot_ranking reports/module3_ranking.json \
+    --output figures/bump_ranking.png
 
 # Yes-bias bar chart
-python -m src.viz.plot_bias reports/module1_bias.json     --output figures/bias_bar.png
+python -m src.viz.plot_bias reports/module1_bias.json \
+    --output figures/bias_bar.png
 ```
 
 ---
@@ -262,5 +296,4 @@ python -m src.viz.plot_bias reports/module1_bias.json     --output figures/bias_
 
 ## License
 
-MITI
-
+MIT

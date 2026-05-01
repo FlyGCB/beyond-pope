@@ -1,0 +1,11 @@
+{
+  "model": "llama32v_11b",
+  "benchmark": "pope_adversarial",
+  "n_total": 3000,
+  "n_valid": 2999,
+  "n_unknown": 1,
+  "accuracy": 0.8363,
+  "yes_rate": 0.5679,
+  "latency_mean_ms": 845.6,
+  "wall_time_s": 3044.2
+}

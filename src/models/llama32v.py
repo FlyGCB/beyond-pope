@@ -18,12 +18,23 @@ class Llama32Vision(BaseVLM):
         model_name: str = "llama32v_11b",
         model_id: str = "meta-llama/Llama-3.2-11B-Vision-Instruct",
         device: str = "cuda",
+        load_in_4bit: bool = False,
+        **kwargs,
     ):
-        super().__init__(model_name=model_name, device=device, model_id=model_id)
+        super().__init__(
+            model_name=model_name,
+            device=device,
+            model_id=model_id,
+            load_in_4bit=load_in_4bit,
+            **kwargs,
+        )
         self.model_id = model_id
+        self.load_in_4bit = load_in_4bit
 
-    def load_model(self, model_id: str, **kwargs):
+    def load_model(self, model_id: str, load_in_4bit: bool = False, **kwargs):
         from transformers import MllamaForConditionalGeneration, AutoProcessor
+
+        self.logger.info(f"Loading {model_id} (4bit={load_in_4bit})")
 
         self.model = MllamaForConditionalGeneration.from_pretrained(
             model_id,
@@ -37,17 +48,23 @@ class Llama32Vision(BaseVLM):
         image = Image.open(image_path).convert("RGB")
 
         messages = [
-            {"role": "user", "content": [
-                {"type": "image"},
-                {"type": "text", "text": question},
-            ]}
+            {
+                "role": "user",
+                "content": [
+                    {"type": "image"},
+                    {"type": "text", "text": question},
+                ],
+            }
         ]
 
         text = self.processor.apply_chat_template(
             messages, add_generation_prompt=True
         )
+
         inputs = self.processor(
-            image, text, return_tensors="pt"
+            image,
+            text,
+            return_tensors="pt",
         ).to(self.device)
 
         with torch.no_grad():

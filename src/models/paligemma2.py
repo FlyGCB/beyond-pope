@@ -18,12 +18,23 @@ class PaliGemma2(BaseVLM):
         model_name: str = "paligemma2_3b",
         model_id: str = "google/paligemma2-3b-pt-448",
         device: str = "cuda",
+        load_in_4bit: bool = False,
+        **kwargs,
     ):
-        super().__init__(model_name=model_name, device=device, model_id=model_id)
+        super().__init__(
+            model_name=model_name,
+            device=device,
+            model_id=model_id,
+            load_in_4bit=load_in_4bit,
+            **kwargs,
+        )
         self.model_id = model_id
+        self.load_in_4bit = load_in_4bit
 
-    def load_model(self, model_id: str, **kwargs):
+    def load_model(self, model_id: str, load_in_4bit: bool = False, **kwargs):
         from transformers import PaliGemmaForConditionalGeneration, AutoProcessor
+
+        self.logger.info(f"Loading {model_id} (4bit={load_in_4bit})")
 
         self.model = PaliGemmaForConditionalGeneration.from_pretrained(
             model_id,

@@ -7,7 +7,6 @@ HuggingFace: https://huggingface.co/OpenGVLab/InternVL2_5-8B
 
 from pathlib import Path
 import torch
-import numpy as np
 from PIL import Image
 import torchvision.transforms as T
 from torchvision.transforms.functional import InterpolationMode
@@ -15,7 +14,7 @@ from torchvision.transforms.functional import InterpolationMode
 from .base import BaseVLM
 
 IMAGENET_MEAN = (0.485, 0.456, 0.406)
-IMAGENET_STD  = (0.229, 0.224, 0.225)
+IMAGENET_STD = (0.229, 0.224, 0.225)
 
 
 def build_transform(input_size: int = 448):
@@ -34,20 +33,39 @@ class InternVL2(BaseVLM):
         model_name: str = "internvl2_8b",
         model_id: str = "OpenGVLab/InternVL2_5-8B",
         device: str = "cuda",
+        load_in_4bit: bool = False,
         load_in_8bit: bool = False,
+        **kwargs,
     ):
-        super().__init__(model_name=model_name, device=device,
-                         model_id=model_id, load_in_8bit=load_in_8bit)
+        super().__init__(
+            model_name=model_name,
+            device=device,
+            model_id=model_id,
+            load_in_4bit=load_in_4bit,
+            load_in_8bit=load_in_8bit,
+            **kwargs,
+        )
         self.model_id = model_id
+        self.load_in_4bit = load_in_4bit
         self.load_in_8bit = load_in_8bit
 
-    def load_model(self, model_id: str, load_in_8bit: bool, **kwargs):
+    def load_model(
+        self,
+        model_id: str,
+        load_in_4bit: bool = False,
+        load_in_8bit: bool = False,
+        **kwargs,
+    ):
         from transformers import AutoTokenizer, AutoModel
 
-        self.logger.info(f"Loading {model_id} (8bit={load_in_8bit})")
+        self.logger.info(
+            f"Loading {model_id} (4bit={load_in_4bit}, 8bit={load_in_8bit})"
+        )
 
         self.tokenizer = AutoTokenizer.from_pretrained(
-            model_id, trust_remote_code=True, use_fast=False
+            model_id,
+            trust_remote_code=True,
+            use_fast=False,
         )
 
         self.model = AutoModel.from_pretrained(
@@ -57,6 +75,7 @@ class InternVL2(BaseVLM):
             device_map="auto",
             trust_remote_code=True,
         )
+
         self.model.eval()
         self.transform = build_transform(input_size=448)
 
