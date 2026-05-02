@@ -2,10 +2,10 @@
   "model": "paligemma2_3b",
   "benchmark": "pope_adversarial",
   "n_total": 3000,
-  "n_valid": 2999,
-  "n_unknown": 1,
-  "accuracy": 0.5002,
-  "yes_rate": 0.0,
-  "latency_mean_ms": 201.1,
-  "wall_time_s": 729.6
+  "n_valid": 3000,
+  "n_unknown": 0,
+  "accuracy": 0.7113,
+  "yes_rate": 0.318,
+  "latency_mean_ms": 127.0,
+  "wall_time_s": 413.1
 }

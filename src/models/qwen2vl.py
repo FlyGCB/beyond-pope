@@ -58,13 +58,13 @@ class Qwen2VL(BaseVLM):
         self.processor = AutoProcessor.from_pretrained(model_id)
 
     def predict(self, image_path: str | Path, question: str) -> str:
-        image = Image.open(image_path).convert("RGB")
+        image_path = str(Path(image_path).resolve())
 
         messages = [
             {
                 "role": "user",
                 "content": [
-                    {"type": "image", "image": image},
+                    {"type": "image", "image": image_path},
                     {"type": "text", "text": question},
                 ],
             }

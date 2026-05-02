@@ -2,10 +2,10 @@
   "model": "qwen2vl_7b",
   "benchmark": "pope_adversarial",
   "n_total": 3000,
-  "n_valid": 3000,
-  "n_unknown": 0,
-  "accuracy": 0.5117,
-  "yes_rate": 0.043,
-  "latency_mean_ms": 344.7,
-  "wall_time_s": 1124.9
+  "n_valid": 2997,
+  "n_unknown": 3,
+  "accuracy": 0.8682,
+  "yes_rate": 0.4811,
+  "latency_mean_ms": 343.4,
+  "wall_time_s": 1207.5
 }

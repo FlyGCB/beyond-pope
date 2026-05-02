@@ -31,7 +31,7 @@ class DeepSeekVL2(BaseVLM):
     def predict(self, image_path: str | Path, question: str) -> str:
         self.ensure_loaded()
         from deepseek_vl2.utils.io import load_pil_images
-
+    
         conversation = [
             {
                 "role": "<|User|>",
@@ -40,19 +40,19 @@ class DeepSeekVL2(BaseVLM):
             },
             {"role": "<|Assistant|>", "content": ""},
         ]
-
+    
         pil_images = load_pil_images(conversation)
         inputs = self.processor(
             conversations=conversation,
             images=pil_images,
             force_batchify=True,
-            system_prompt="",
+            system_prompt="You are a helpful assistant. Answer only Yes or No.",
         ).to(self.model.device)
-
+    
         inputs_embeds = self.model.prepare_inputs_embeds(**inputs)
-
+    
         with torch.no_grad():
-            outputs = self.model.language_model.generate(
+            outputs = self.model.generate(          # language_model → model
                 inputs_embeds=inputs_embeds,
                 attention_mask=inputs.attention_mask,
                 pad_token_id=self.tokenizer.eos_token_id,
@@ -62,7 +62,7 @@ class DeepSeekVL2(BaseVLM):
                 do_sample=False,
                 use_cache=True,
             )
-
+    
         return self.tokenizer.decode(
             outputs[0].cpu().tolist(), skip_special_tokens=True
         ).strip()

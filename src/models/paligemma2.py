@@ -16,7 +16,7 @@ class PaliGemma2(BaseVLM):
     def __init__(
         self,
         model_name: str = "paligemma2_3b",
-        model_id: str = "google/paligemma2-3b-pt-448",
+        model_id: str = "google/paligemma2-3b-mix-448",
         device: str = "cuda",
         load_in_4bit: bool = False,
         **kwargs,
@@ -46,23 +46,27 @@ class PaliGemma2(BaseVLM):
 
     def predict(self, image_path: str | Path, question: str) -> str:
         image = Image.open(image_path).convert("RGB")
-
+    
+        pg_question = "answer en " + question
+    
         inputs = self.processor(
-            text=question,
+            text=pg_question,
             images=image,
             return_tensors="pt",
             padding=True,
         ).to(self.device)
-
+    
+        input_len = inputs["input_ids"].shape[-1]
+    
         with torch.no_grad():
             output = self.model.generate(
                 **inputs,
                 max_new_tokens=5,
                 do_sample=False,
             )
-
+    
         decoded = self.processor.decode(
-            output[0][inputs["input_ids"].shape[-1]:],
+            output[0][input_len:],
             skip_special_tokens=True,
         )
         return decoded.strip()
