@@ -1,0 +1,11 @@
+{
+  "model": "phi35v_4b",
+  "benchmark": "repope_adversarial",
+  "n_total": 2684,
+  "n_valid": 2683,
+  "n_unknown": 1,
+  "accuracy": 0.8498,
+  "yes_rate": 0.3802,
+  "latency_mean_ms": 402.4,
+  "wall_time_s": 1171.3
+}
