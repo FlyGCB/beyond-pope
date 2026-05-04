@@ -1,0 +1,11 @@
+{
+  "model": "llama32v_11b",
+  "benchmark": "dashb",
+  "n_total": 2682,
+  "n_valid": 2682,
+  "n_unknown": 0,
+  "accuracy": 0.5377,
+  "yes_rate": 0.9012,
+  "latency_mean_ms": 408.4,
+  "wall_time_s": 1447.7
+}

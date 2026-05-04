@@ -1,0 +1,11 @@
+{
+  "model": "internvl2_8b",
+  "benchmark": "dashb",
+  "n_total": 2682,
+  "n_valid": 2682,
+  "n_unknown": 0,
+  "accuracy": 0.7125,
+  "yes_rate": 0.7442,
+  "latency_mean_ms": 212.4,
+  "wall_time_s": 855.9
+}

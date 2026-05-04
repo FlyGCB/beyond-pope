@@ -1,0 +1,11 @@
+{
+  "model": "paligemma2_3b",
+  "benchmark": "dashb",
+  "n_total": 2682,
+  "n_valid": 2682,
+  "n_unknown": 0,
+  "accuracy": 0.7987,
+  "yes_rate": 0.6439,
+  "latency_mean_ms": 136.3,
+  "wall_time_s": 464.6
+}

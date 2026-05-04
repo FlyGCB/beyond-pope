@@ -1,0 +1,11 @@
+{
+  "model": "internvl2_8b",
+  "benchmark": "repope_popular",
+  "n_total": 2727,
+  "n_valid": 2727,
+  "n_unknown": 0,
+  "accuracy": 0.8966,
+  "yes_rate": 0.5035,
+  "latency_mean_ms": 305.3,
+  "wall_time_s": 1008.3
+}

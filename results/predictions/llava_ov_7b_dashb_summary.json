@@ -1,0 +1,11 @@
+{
+  "model": "llava_ov_7b",
+  "benchmark": "dashb",
+  "n_total": 2682,
+  "n_valid": 2682,
+  "n_unknown": 0,
+  "accuracy": 0.6279,
+  "yes_rate": 0.8602,
+  "latency_mean_ms": 424.7,
+  "wall_time_s": 1272.6
+}

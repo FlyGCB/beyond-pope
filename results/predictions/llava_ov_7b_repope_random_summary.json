@@ -1,0 +1,11 @@
+{
+  "model": "llava_ov_7b",
+  "benchmark": "repope_random",
+  "n_total": 2774,
+  "n_valid": 2774,
+  "n_unknown": 0,
+  "accuracy": 0.9517,
+  "yes_rate": 0.3962,
+  "latency_mean_ms": 459.2,
+  "wall_time_s": 1416.8
+}

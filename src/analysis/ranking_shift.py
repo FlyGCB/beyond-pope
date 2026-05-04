@@ -1,313 +1,289 @@
 """
-src/analysis/ranking_shift.py
+ranking_shift.py
+----------------
+Module 2 & 3: Quantify ranking instability across benchmarks using
+Spearman rank correlation (ρ).
 
-Compute Spearman rank correlations across POPE → RePOPE → DASH-B benchmarks
-to quantify whether model rankings are stable or significantly shift.
+Low ρ between POPE and RePOPE → annotation errors distort rankings (Module 2)
+CV recovery on DASH-B         → harder benchmark restores discriminability (Module 3)
+
+Usage
+-----
+    python -m src.analysis.ranking_shift \
+        --results-dir results/predictions \
+        --output reports/module2_ranking.json
+
+    # Custom benchmark sequence
+    python -m src.analysis.ranking_shift \
+        --results-dir results/predictions \
+        --benchmarks pope_adversarial repope_adversarial dashb \
+        --output reports/module23_ranking.json
 """
 
 from __future__ import annotations
 
-import warnings
-from dataclasses import dataclass, field
-from typing import Optional
+import argparse
+import json
+from pathlib import Path
+from collections import defaultdict
+from itertools import combinations
 
 import numpy as np
-from scipy.stats import spearmanr
 
 
 # ---------------------------------------------------------------------------
-# Constants
+# I/O
 # ---------------------------------------------------------------------------
 
-BENCHMARK_ORDER = ["pope_adversarial", "repope_adversarial", "dashb_adversarial"]
-BENCHMARK_LABELS = {
-    "pope_adversarial":   "POPE",
-    "repope_adversarial": "RePOPE",
-    "dashb_adversarial":  "DASH-B",
-}
-
-# ρ below this threshold is considered a "significant" ranking shift
-RHO_SHIFT_THRESHOLD = 0.7
-
-
-# ---------------------------------------------------------------------------
-# Data structures
-# ---------------------------------------------------------------------------
-
-@dataclass
-class BenchmarkRanking:
-    """Ranked model list for a single benchmark."""
-    benchmark: str
-    # model_name → F1 score (0–1)
-    scores: dict[str, float]
-    # model_name → rank (1 = best)
-    ranks: dict[str, int] = field(default_factory=dict)
-
-    def __post_init__(self):
-        sorted_models = sorted(self.scores, key=lambda m: self.scores[m], reverse=True)
-        self.ranks = {model: i + 1 for i, model in enumerate(sorted_models)}
+def load_summaries(results_dir: Path) -> list[dict]:
+    summaries = []
+    for path in sorted(results_dir.glob("*_summary.json")):
+        if path.name.startswith("_"):
+            continue
+        with open(path) as f:
+            summaries.append(json.load(f))
+    return summaries
 
 
-@dataclass
-class PairwiseShift:
-    """Spearman ρ between two consecutive benchmarks."""
-    benchmark_a: str
-    benchmark_b: str
-    rho: float
-    p_value: float
-    common_models: list[str]
-    significant_shift: bool  # True when ρ < RHO_SHIFT_THRESHOLD
-
-    @property
-    def label_a(self) -> str:
-        return BENCHMARK_LABELS.get(self.benchmark_a, self.benchmark_a)
-
-    @property
-    def label_b(self) -> str:
-        return BENCHMARK_LABELS.get(self.benchmark_b, self.benchmark_b)
-
-    def summary(self) -> str:
-        shift_tag = "⚠ SIGNIFICANT SHIFT" if self.significant_shift else "✓ stable"
-        return (
-            f"{self.label_a} → {self.label_b}: "
-            f"ρ = {self.rho:+.4f}, p = {self.p_value:.4f}  [{shift_tag}]"
-        )
-
-
-@dataclass
-class RankingShiftReport:
-    """Full report: ranking matrices + pairwise Spearman ρ values."""
-    rankings: list[BenchmarkRanking]          # one per benchmark
-    pairwise: list[PairwiseShift]             # consecutive pairs
-    rank_matrix: dict[str, dict[str, int]]    # model → {benchmark → rank}
-    score_matrix: dict[str, dict[str, float]] # model → {benchmark → F1}
-
-    def print(self) -> None:
-        print("=" * 60)
-        print("  RANKING SHIFT REPORT")
-        print("=" * 60)
-
-        # Score matrix
-        benchmarks = [r.benchmark for r in self.rankings]
-        labels = [BENCHMARK_LABELS.get(b, b) for b in benchmarks]
-        all_models = list(self.rank_matrix.keys())
-
-        col_w = 10
-        header = f"{'Model':<30}" + "".join(f"{lb:>{col_w}}" for lb in labels)
-        print("
-F1 Scores:")
-        print(header)
-        print("-" * len(header))
-        for model in all_models:
-            row = f"{model:<30}"
-            for b in benchmarks:
-                score = self.score_matrix[model].get(b)
-                row += f"{score:>{col_w}.4f}" if score is not None else f"{'N/A':>{col_w}}"
-            print(row)
-
-        # Rank matrix
-        print("
-Ranks (1 = best):")
-        print(header)
-        print("-" * len(header))
-        for model in all_models:
-            row = f"{model:<30}"
-            for b in benchmarks:
-                rank = self.rank_matrix[model].get(b)
-                row += f"{rank:>{col_w}}" if rank is not None else f"{'N/A':>{col_w}}"
-            print(row)
-
-        # Pairwise ρ
-        print("
-Spearman ρ (pairwise):")
-        for pw in self.pairwise:
-            print(f"  {pw.summary()}")
-            print(f"    (n={len(pw.common_models)} common models)")
-
-        print("=" * 60)
-
-
-# ---------------------------------------------------------------------------
-# Core computation
-# ---------------------------------------------------------------------------
-
-def _extract_f1_per_benchmark(
-    model_results: dict[str, dict],
-    benchmarks: list[str],
+def build_score_matrix(
+    summaries: list[dict],
+    metric: str = "accuracy",
 ) -> dict[str, dict[str, float]]:
     """
-    Extract F1 scores from batch_evaluate() output.
-
-    Expected input shape (one entry per model):
-        {
-          "Qwen2.5-VL-7B": {
-              "pope_adversarial":   {"f1": 0.91, ...},
-              "repope_adversarial": {"f1": 0.88, ...},
-              ...
-          },
-          ...
-        }
-
-    Returns: model → {benchmark → f1}
+    Returns {benchmark: {model: score}}.
+    Only includes (benchmark, model) pairs where the score is valid
+    (i.e. not a 0.5 random-baseline result with unknown=n_total).
     """
-    result: dict[str, dict[str, float]] = {}
-    for model, bench_reports in model_results.items():
-        result[model] = {}
-        for bench in benchmarks:
-            report = bench_reports.get(bench)
-            if report is None:
-                warnings.warn(
-                    f"Model '{model}' has no results for benchmark '{bench}'. "
-                    "It will be excluded from pairwise ρ involving this benchmark.",
-                    UserWarning,
-                    stacklevel=3,
-                )
-                continue
-            # Support both dict-style and object-style reports
-            f1 = report["f1"] if isinstance(report, dict) else report.f1
-            result[model][bench] = float(f1)
+    matrix: dict[str, dict[str, float]] = defaultdict(dict)
+    for s in summaries:
+        # Skip degenerate results (all unknown → random baseline)
+        if s.get("n_unknown", 0) == s.get("n_total", 1):
+            continue
+        bm    = s["benchmark"]
+        model = s["model"]
+        if metric in s:
+            matrix[bm][model] = s[metric]
+    return dict(matrix)
+
+
+# ---------------------------------------------------------------------------
+# Spearman ρ
+# ---------------------------------------------------------------------------
+
+def spearman_rho(
+    scores_a: dict[str, float],
+    scores_b: dict[str, float],
+) -> tuple[float, list[str]]:
+    """
+    Compute Spearman ρ between two {model: score} dicts.
+    Only uses models present in both dicts.
+
+    Returns (rho, common_models).
+    """
+    common = sorted(set(scores_a) & set(scores_b))
+    if len(common) < 2:
+        return float("nan"), common
+
+    a = np.array([scores_a[m] for m in common])
+    b = np.array([scores_b[m] for m in common])
+
+    # Rank (1 = best)
+    rank_a = len(a) + 1 - a.argsort().argsort()
+    rank_b = len(b) + 1 - b.argsort().argsort()
+
+    d2 = ((rank_a - rank_b) ** 2).sum()
+    n  = len(common)
+    rho = 1 - 6 * d2 / (n * (n**2 - 1))
+
+    return round(float(rho), 4), common
+
+
+def ranking_table(scores: dict[str, float]) -> list[tuple[int, str, float]]:
+    """Return [(rank, model, score)] sorted best→worst."""
+    sorted_models = sorted(scores, key=scores.get, reverse=True)
+    return [(i+1, m, round(scores[m], 4)) for i, m in enumerate(sorted_models)]
+
+
+# ---------------------------------------------------------------------------
+# Rank change analysis
+# ---------------------------------------------------------------------------
+
+def rank_changes(
+    scores_a: dict[str, float],
+    scores_b: dict[str, float],
+) -> dict[str, dict]:
+    """
+    For each model, compute rank in benchmark A vs B and the delta.
+
+    Returns {model: {rank_a, rank_b, delta, score_a, score_b}}
+    """
+    common = sorted(set(scores_a) & set(scores_b))
+    ranks_a = {m: r for r, m, _ in ranking_table({m: scores_a[m] for m in common})}
+    ranks_b = {m: r for r, m, _ in ranking_table({m: scores_b[m] for m in common})}
+
+    result = {}
+    for m in common:
+        delta = ranks_a[m] - ranks_b[m]   # positive = moved up in B
+        result[m] = {
+            "rank_a":  ranks_a[m],
+            "rank_b":  ranks_b[m],
+            "delta":   delta,
+            "score_a": round(scores_a[m], 4),
+            "score_b": round(scores_b[m], 4),
+        }
     return result
 
 
-def _compute_pairwise_spearman(
-    rankings: list[BenchmarkRanking],
-) -> list[PairwiseShift]:
-    """Compute Spearman ρ for each consecutive benchmark pair."""
-    pairs: list[PairwiseShift] = []
-    for a, b in zip(rankings, rankings[1:]):
-        common = sorted(set(a.scores) & set(b.scores))
-        if len(common) < 3:
-            warnings.warn(
-                f"Only {len(common)} common models between "
-                f"'{a.benchmark}' and '{b.benchmark}'. "
-                "Spearman ρ may not be reliable.",
-                UserWarning,
-            )
-        ranks_a = [a.ranks[m] for m in common]
-        ranks_b = [b.ranks[m] for m in common]
-        rho, p_val = spearmanr(ranks_a, ranks_b)
-        pairs.append(PairwiseShift(
-            benchmark_a=a.benchmark,
-            benchmark_b=b.benchmark,
-            rho=float(rho),
-            p_value=float(p_val),
-            common_models=common,
-            significant_shift=float(rho) < RHO_SHIFT_THRESHOLD,
-        ))
-    return pairs
+# ---------------------------------------------------------------------------
+# Full report
+# ---------------------------------------------------------------------------
 
-
-def compute_ranking_shift(
-    model_results: dict[str, dict],
-    benchmarks: Optional[list[str]] = None,
-) -> RankingShiftReport:
+def run(
+    results_dir: Path,
+    benchmarks: list[str] | None = None,
+    metric: str = "accuracy",
+) -> dict:
     """
-    Main entry point.
-
-    Parameters
-    ----------
-    model_results : dict
-        Output of batch_evaluate(), keyed by model name.
-        Each value is a dict mapping benchmark name → eval report.
-    benchmarks : list[str], optional
-        Ordered benchmark names to compare.
-        Defaults to BENCHMARK_ORDER = [pope, repope, dashb].
+    Compute pairwise Spearman ρ and rank changes across benchmarks.
 
     Returns
     -------
-    RankingShiftReport
+    {
+        "metric": str,
+        "benchmarks_analysed": [str],
+        "rankings": {benchmark: [(rank, model, score)]},
+        "pairwise_rho": {
+            "pope_adversarial__repope_adversarial": {
+                rho, common_models, rank_changes: {model: {...}}
+            },
+            ...
+        },
+        "rho_summary": [{pair, rho, interpretation}],
+    }
     """
-    if benchmarks is None:
-        benchmarks = BENCHMARK_ORDER
+    summaries  = load_summaries(results_dir)
+    matrix     = build_score_matrix(summaries, metric)
 
-    score_matrix = _extract_f1_per_benchmark(model_results, benchmarks)
+    if benchmarks:
+        matrix = {k: v for k, v in matrix.items() if k in benchmarks}
 
-    # Build BenchmarkRanking for each benchmark (only models with a score)
-    rankings: list[BenchmarkRanking] = []
-    for bench in benchmarks:
-        scores = {
-            model: score_matrix[model][bench]
-            for model in score_matrix
-            if bench in score_matrix[model]
+    bm_list = sorted(matrix.keys())
+
+    # Per-benchmark rankings
+    rankings = {
+        bm: ranking_table(matrix[bm])
+        for bm in bm_list
+    }
+
+    # Pairwise Spearman ρ
+    pairwise = {}
+    rho_summary = []
+
+    for bm_a, bm_b in combinations(bm_list, 2):
+        rho, common = spearman_rho(matrix[bm_a], matrix[bm_b])
+        changes     = rank_changes(matrix[bm_a], matrix[bm_b])
+        key         = f"{bm_a}__{bm_b}"
+
+        # Interpretation
+        if np.isnan(rho):
+            interp = "insufficient data"
+        elif rho >= 0.9:
+            interp = "very stable ranking"
+        elif rho >= 0.7:
+            interp = "moderately stable"
+        elif rho >= 0.5:
+            interp = "unstable — annotation/difficulty effects present"
+        else:
+            interp = "highly unstable — rankings unreliable"
+
+        pairwise[key] = {
+            "benchmark_a":   bm_a,
+            "benchmark_b":   bm_b,
+            "rho":           rho,
+            "n_common":      len(common),
+            "common_models": common,
+            "interpretation":interp,
+            "rank_changes":  changes,
         }
-        if not scores:
-            warnings.warn(f"No model has results for benchmark '{bench}'. Skipping.", UserWarning)
-            continue
-        rankings.append(BenchmarkRanking(benchmark=bench, scores=scores))
 
-    pairwise = _compute_pairwise_spearman(rankings)
+        rho_summary.append({
+            "pair":           key,
+            "rho":            rho,
+            "interpretation": interp,
+        })
 
-    # Build rank matrix (None if model missing for a benchmark)
-    all_models = sorted(score_matrix.keys())
-    rank_matrix: dict[str, dict[str, int]] = {m: {} for m in all_models}
-    for br in rankings:
-        for model in all_models:
-            if model in br.ranks:
-                rank_matrix[model][br.benchmark] = br.ranks[model]
+    rho_summary.sort(key=lambda x: x["rho"] if not np.isnan(x["rho"]) else 999)
 
-    return RankingShiftReport(
-        rankings=rankings,
-        pairwise=pairwise,
-        rank_matrix=rank_matrix,
-        score_matrix=score_matrix,
-    )
+    return {
+        "metric":               metric,
+        "benchmarks_analysed":  bm_list,
+        "rankings":             {bm: [(r, m, s) for r, m, s in rankings[bm]]
+                                 for bm in bm_list},
+        "pairwise_rho":         pairwise,
+        "rho_summary":          rho_summary,
+    }
 
 
-# ---------------------------------------------------------------------------
-# Convenience: load from evaluator output
-# ---------------------------------------------------------------------------
+def print_report(report: dict):
+    print(f"\n{'='*65}")
+    print(f"RANKING SHIFT REPORT  (metric={report['metric']})")
+    print(f"{'='*65}")
 
-def ranking_shift_from_evaluator(results_dir: str) -> RankingShiftReport:
-    """
-    Load batch_evaluate() results from a directory of JSONL files
-    and compute ranking shift.
+    for bm, rows in report["rankings"].items():
+        print(f"\n── {bm} ──")
+        for rank, model, score in rows:
+            print(f"  #{rank}  {model:<28}  {score:.4f}")
 
-    Expects files named like:
-        results/qwen_pope_adversarial.jsonl
-        results/qwen_repope_adversarial.jsonl
-        ...
+    print(f"\n── Pairwise Spearman ρ ──")
+    print(f"{'Pair':<50} {'ρ':>6}  Interpretation")
+    print(f"{'-'*65}")
+    for row in report["rho_summary"]:
+        rho_str = f"{row['rho']:.4f}" if not np.isnan(row["rho"]) else "  nan"
+        print(f"{row['pair']:<50} {rho_str:>6}  {row['interpretation']}")
 
-    Delegates to evaluator.batch_evaluate() then calls compute_ranking_shift().
-    """
-    # Import here to avoid circular dependency
-    from eval.evaluator import batch_evaluate  # noqa: PLC0415
-
-    raw = batch_evaluate(results_dir)          # dict[model → dict[bench → EvalReport]]
-    return compute_ranking_shift(raw)
+    # Highlight biggest rank movers
+    print(f"\n── Biggest rank changes (POPE adv → RePOPE adv) ──")
+    key = "pope_adversarial__repope_adversarial"
+    if key in report["pairwise_rho"]:
+        changes = report["pairwise_rho"][key]["rank_changes"]
+        sorted_changes = sorted(changes.items(), key=lambda x: abs(x[1]["delta"]), reverse=True)
+        for model, c in sorted_changes:
+            arrow = "↑" if c["delta"] > 0 else ("↓" if c["delta"] < 0 else "→")
+            print(
+                f"  {model:<28}  #{c['rank_a']} → #{c['rank_b']}  "
+                f"({arrow}{abs(c['delta'])})  "
+                f"{c['score_a']:.3f} → {c['score_b']:.3f}"
+            )
 
 
 # ---------------------------------------------------------------------------
 # CLI
 # ---------------------------------------------------------------------------
 
-if __name__ == "__main__":
-    import argparse, json, sys
-
-    parser = argparse.ArgumentParser(description="Compute ranking shift (Spearman ρ) across benchmarks.")
-    parser.add_argument("results_dir", help="Directory containing JSONL inference results.")
-    parser.add_argument("--benchmarks", nargs="+", default=None,
-                        help="Benchmark names in order (default: pope → repope → dashb).")
-    parser.add_argument("--json", action="store_true", help="Output raw JSON instead of formatted report.")
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--results-dir", default="results/predictions")
+    parser.add_argument(
+        "--benchmarks", nargs="*",
+        default=["pope_adversarial", "repope_adversarial", "dashb"],
+        help="Benchmarks to include (in order)",
+    )
+    parser.add_argument("--metric", default="accuracy",
+                        choices=["accuracy", "f1", "yes_rate"])
+    parser.add_argument("--output", default="reports/module23_ranking.json")
     args = parser.parse_args()
 
-    report = ranking_shift_from_evaluator(args.results_dir)
+    results_dir = Path(args.results_dir)
+    output_path = Path(args.output)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
 
-    if args.json:
-        out = {
-            "pairwise": [
-                {
-                    "benchmark_a": pw.benchmark_a,
-                    "benchmark_b": pw.benchmark_b,
-                    "rho": pw.rho,
-                    "p_value": pw.p_value,
-                    "significant_shift": pw.significant_shift,
-                    "common_models": pw.common_models,
-                }
-                for pw in report.pairwise
-            ],
-            "rank_matrix": report.rank_matrix,
-            "score_matrix": report.score_matrix,
-        }
-        print(json.dumps(out, indent=2))
-    else:
-        report.print()
+    report = run(results_dir, args.benchmarks, args.metric)
+    print_report(report)
+
+    with open(output_path, "w") as f:
+        json.dump(report, f, indent=2)
+    print(f"\nSaved → {output_path}")
+
+
+if __name__ == "__main__":
+    main()

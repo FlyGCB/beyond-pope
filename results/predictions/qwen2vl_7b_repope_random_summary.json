@@ -1,0 +1,11 @@
+{
+  "model": "qwen2vl_7b",
+  "benchmark": "repope_random",
+  "n_total": 2774,
+  "n_valid": 2771,
+  "n_unknown": 3,
+  "accuracy": 0.9473,
+  "yes_rate": 0.4193,
+  "latency_mean_ms": 285.5,
+  "wall_time_s": 943.9
+}

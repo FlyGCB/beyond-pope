@@ -1,269 +1,253 @@
 """
-src/analysis/bias_analysis.py
+bias_analysis.py
+----------------
+Module 1 (supplementary): Yes-bias distribution across models and benchmarks.
 
-Analyse Yes-bias distribution across models and benchmarks.
+yes_bias = yes_rate - 0.5
+  > 0  → model over-predicts "yes"
+  < 0  → model over-predicts "no"
+  = 0  → perfectly calibrated
 
-Yes-bias = yes_rate - 0.5
-  > 0  → model over-predicts "yes" (hallucination-prone)
-  < 0  → model over-predicts "no"  (over-cautious)
-  = 0  → perfectly balanced
+A well-designed benchmark should produce near-zero bias for all models.
+Systematic bias (e.g. all models > +0.1) indicates benchmark imbalance
+or prompt sensitivity.
+
+Usage
+-----
+    python -m src.analysis.bias_analysis \
+        --results-dir results/predictions \
+        --output reports/module1_bias.json
+
+    # Only POPE splits
+    python -m src.analysis.bias_analysis \
+        --results-dir results/predictions \
+        --benchmarks pope_adversarial pope_popular pope_random \
+        --output reports/module1_bias.json
 """
 
 from __future__ import annotations
 
-import warnings
-from dataclasses import dataclass, field
-from typing import Optional
+import argparse
+import json
+from pathlib import Path
+from collections import defaultdict
 
 import numpy as np
 
 
 # ---------------------------------------------------------------------------
-# Constants
+# I/O
 # ---------------------------------------------------------------------------
 
-BIAS_SEVERE_THRESHOLD = 0.15   # |yes_bias| ≥ this → severe
-BIAS_MODERATE_THRESHOLD = 0.07 # |yes_bias| ≥ this → moderate
-
-BENCHMARK_LABELS = {
-    "pope_adversarial":   "POPE",
-    "repope_adversarial": "RePOPE",
-    "dashb_adversarial":  "DASH-B",
-    "xpope_existence":    "X-POPE (exist)",
-    "xpope_attribute":    "X-POPE (attr)",
-    "xpope_relation":     "X-POPE (rel)",
-}
+def load_summaries(results_dir: Path) -> list[dict]:
+    summaries = []
+    for path in sorted(results_dir.glob("*_summary.json")):
+        if path.name.startswith("_"):
+            continue
+        with open(path) as f:
+            summaries.append(json.load(f))
+    return summaries
 
 
 # ---------------------------------------------------------------------------
-# Data structures
+# Core
 # ---------------------------------------------------------------------------
 
-def _bias_level(yes_bias: float) -> str:
-    ab = abs(yes_bias)
-    if ab >= BIAS_SEVERE_THRESHOLD:
-        return "severe"
-    if ab >= BIAS_MODERATE_THRESHOLD:
-        return "moderate"
-    return "mild"
+def yes_bias(yes_rate: float) -> float:
+    return round(yes_rate - 0.5, 4)
 
 
-def _bias_direction(yes_bias: float) -> str:
-    if yes_bias > 0.01:
-        return "yes-biased"
-    if yes_bias < -0.01:
-        return "no-biased"
-    return "balanced"
-
-
-@dataclass
-class ModelBiasEntry:
-    """Yes-bias for one model on one benchmark."""
-    model: str
-    benchmark: str
-    yes_rate: float        # fraction of "yes" answers (0–1)
-    yes_bias: float        # yes_rate - 0.5
-    level: str             # mild / moderate / severe
-    direction: str         # yes-biased / no-biased / balanced
-
-    @classmethod
-    def from_report(cls, model: str, benchmark: str, report: dict | object) -> "ModelBiasEntry":
-        yr = report["yes_rate"] if isinstance(report, dict) else report.yes_rate
-        yb = float(yr) - 0.5
-        return cls(
-            model=model,
-            benchmark=benchmark,
-            yes_rate=float(yr),
-            yes_bias=yb,
-            level=_bias_level(yb),
-            direction=_bias_direction(yb),
-        )
-
-
-@dataclass
-class BiasSummary:
-    """Aggregated yes-bias statistics for one model across all benchmarks."""
-    model: str
-    entries: list[ModelBiasEntry]
-    mean_bias: float = field(init=False)
-    std_bias: float  = field(init=False)
-    max_abs_bias: float = field(init=False)
-    worst_benchmark: str = field(init=False)
-
-    def __post_init__(self):
-        biases = [e.yes_bias for e in self.entries]
-        self.mean_bias = float(np.mean(biases))
-        self.std_bias  = float(np.std(biases))
-        worst = max(self.entries, key=lambda e: abs(e.yes_bias))
-        self.max_abs_bias  = abs(worst.yes_bias)
-        self.worst_benchmark = worst.benchmark
-
-    @property
-    def overall_level(self) -> str:
-        return _bias_level(self.mean_bias)
-
-    @property
-    def overall_direction(self) -> str:
-        return _bias_direction(self.mean_bias)
-
-
-@dataclass
-class BiasAnalysisReport:
-    """Full yes-bias report across all models and benchmarks."""
-    entries: list[ModelBiasEntry]           # flat list
-    summaries: dict[str, BiasSummary]       # model → summary
-    # benchmark → list of (model, yes_bias) sorted by |bias|
-    per_benchmark: dict[str, list[tuple[str, float]]]
-
-    def print(self) -> None:
-        print("=" * 70)
-        print("  YES-BIAS ANALYSIS REPORT")
-        print(f"  Thresholds — moderate: ±{BIAS_MODERATE_THRESHOLD}, severe: ±{BIAS_SEVERE_THRESHOLD}")
-        print("=" * 70)
-
-        # Per-model summary
-        print("
-Per-Model Summary (mean yes_bias across benchmarks):")
-        header = f"  {'Model':<30} {'Mean bias':>10} {'Std':>8} {'Max|bias|':>10} {'Level':<10} {'Direction'}"
-        print(header)
-        print("  " + "-" * (len(header) - 2))
-        for model, s in sorted(self.summaries.items(), key=lambda x: abs(x[1].mean_bias), reverse=True):
-            print(
-                f"  {model:<30} {s.mean_bias:>+10.4f} {s.std_bias:>8.4f} "
-                f"{s.max_abs_bias:>10.4f} {s.overall_level:<10} {s.overall_direction}"
-            )
-
-        # Per-benchmark detail
-        print("
-Per-Benchmark Bias (sorted by |bias|):")
-        for bench, ranked in self.per_benchmark.items():
-            label = BENCHMARK_LABELS.get(bench, bench)
-            print(f"
-  [{label}]")
-            for model, yb in ranked:
-                bar = "█" * int(abs(yb) * 40)
-                direction = "→yes" if yb > 0 else "→no "
-                level = _bias_level(yb)
-                print(f"    {model:<30} {yb:>+7.4f} {direction}  {bar}  [{level}]")
-
-        print("=" * 70)
-
-
-# ---------------------------------------------------------------------------
-# Core computation
-# ---------------------------------------------------------------------------
-
-def compute_bias_analysis(
-    model_results: dict[str, dict],
-    benchmarks: Optional[list[str]] = None,
-) -> BiasAnalysisReport:
+def bias_for_benchmark(records: list[dict]) -> dict:
     """
-    Compute yes-bias analysis from batch_evaluate() output.
-
-    Parameters
-    ----------
-    model_results : dict
-        Output of batch_evaluate():
-        { model_name → { benchmark_name → EvalReport (dict or object with .yes_rate) } }
-    benchmarks : list[str], optional
-        Subset of benchmarks to analyse. None = all available.
+    Compute yes-bias stats for one benchmark across all models.
 
     Returns
     -------
-    BiasAnalysisReport
+    {
+        benchmark,
+        per_model: {model: {yes_rate, yes_bias, accuracy}},
+        mean_bias, std_bias, max_abs_bias,
+        systematic: bool,   # True if |mean_bias| > 0.1
+        direction: str,     # "yes-leaning" / "no-leaning" / "balanced"
+    }
     """
-    entries: list[ModelBiasEntry] = []
+    per_model = {}
+    for r in records:
+        if r.get("n_unknown", 0) == r.get("n_total", 1):
+            continue
+        yr = r.get("yes_rate", 0.5)
+        per_model[r["model"]] = {
+            "yes_rate":  round(yr, 4),
+            "yes_bias":  yes_bias(yr),
+            "accuracy":  round(r.get("accuracy", 0), 4),
+        }
 
-    for model, bench_reports in model_results.items():
-        for bench, report in bench_reports.items():
-            if benchmarks and bench not in benchmarks:
-                continue
-            # guard: report must have yes_rate
-            yr = report.get("yes_rate") if isinstance(report, dict) else getattr(report, "yes_rate", None)
-            if yr is None:
-                warnings.warn(
-                    f"Model '{model}' benchmark '{bench}' missing yes_rate. Skipping.",
-                    UserWarning,
-                )
-                continue
-            entries.append(ModelBiasEntry.from_report(model, bench, report))
+    if not per_model:
+        return {"benchmark": records[0]["benchmark"], "error": "no valid records"}
 
-    if not entries:
-        raise ValueError("No valid entries found. Check that model_results contains yes_rate fields.")
+    biases = [v["yes_bias"] for v in per_model.values()]
+    arr = np.array(biases)
+    mean_bias = float(arr.mean())
 
-    # Per-model summaries
-    models = sorted({e.model for e in entries})
-    summaries: dict[str, BiasSummary] = {}
-    for model in models:
-        model_entries = [e for e in entries if e.model == model]
-        if model_entries:
-            summaries[model] = BiasSummary(model=model, entries=model_entries)
+    if mean_bias > 0.1:
+        direction = "yes-leaning"
+    elif mean_bias < -0.1:
+        direction = "no-leaning"
+    else:
+        direction = "balanced"
 
-    # Per-benchmark ranked lists
-    all_benchmarks = sorted({e.benchmark for e in entries})
-    per_benchmark: dict[str, list[tuple[str, float]]] = {}
-    for bench in all_benchmarks:
-        bench_entries = [e for e in entries if e.benchmark == bench]
-        per_benchmark[bench] = sorted(
-            [(e.model, e.yes_bias) for e in bench_entries],
-            key=lambda x: abs(x[1]),
-            reverse=True,
+    return {
+        "benchmark":    records[0]["benchmark"],
+        "per_model":    per_model,
+        "mean_bias":    round(mean_bias, 4),
+        "std_bias":     round(float(arr.std()), 4),
+        "max_abs_bias": round(float(np.abs(arr).max()), 4),
+        "systematic":   abs(mean_bias) > 0.1,
+        "direction":    direction,
+    }
+
+
+# ---------------------------------------------------------------------------
+# Cross-benchmark bias stability
+# ---------------------------------------------------------------------------
+
+def bias_stability(
+    per_bm: dict[str, dict],
+) -> dict[str, dict]:
+    """
+    For each model, compute bias variance across benchmarks.
+    High variance → model's yes-bias is unstable across benchmarks.
+
+    Returns {model: {biases_by_benchmark, mean_bias, std_bias}}
+    """
+    model_biases: dict[str, dict[str, float]] = defaultdict(dict)
+    for bm, data in per_bm.items():
+        for model, stats in data.get("per_model", {}).items():
+            model_biases[model][bm] = stats["yes_bias"]
+
+    result = {}
+    for model, bm_biases in sorted(model_biases.items()):
+        vals = list(bm_biases.values())
+        arr  = np.array(vals)
+        result[model] = {
+            "biases_by_benchmark": bm_biases,
+            "mean_bias":           round(float(arr.mean()), 4),
+            "std_bias":            round(float(arr.std()), 4),
+            "range":               round(float(arr.max() - arr.min()), 4),
+        }
+    return result
+
+
+# ---------------------------------------------------------------------------
+# Full report
+# ---------------------------------------------------------------------------
+
+def run(
+    results_dir: Path,
+    benchmarks: list[str] | None = None,
+) -> dict:
+    """
+    Returns
+    -------
+    {
+        "per_benchmark": {benchmark: bias_dict},
+        "bias_stability": {model: stability_dict},
+        "systematic_benchmarks": [str],
+        "summary_table": [{benchmark, mean_bias, direction, systematic}],
+    }
+    """
+    summaries = load_summaries(results_dir)
+
+    groups: dict[str, list[dict]] = defaultdict(list)
+    for s in summaries:
+        groups[s["benchmark"]].append(s)
+
+    if benchmarks:
+        groups = {k: v for k, v in groups.items() if k in benchmarks}
+
+    per_bm = {
+        bm: bias_for_benchmark(records)
+        for bm, records in sorted(groups.items())
+    }
+
+    stability = bias_stability(per_bm)
+
+    systematic = [
+        bm for bm, d in per_bm.items() if d.get("systematic")
+    ]
+
+    summary_table = [
+        {
+            "benchmark":  bm,
+            "mean_bias":  d.get("mean_bias"),
+            "std_bias":   d.get("std_bias"),
+            "direction":  d.get("direction"),
+            "systematic": d.get("systematic"),
+        }
+        for bm, d in per_bm.items()
+    ]
+    summary_table.sort(key=lambda x: abs(x["mean_bias"] or 0), reverse=True)
+
+    return {
+        "per_benchmark":          per_bm,
+        "bias_stability":         stability,
+        "systematic_benchmarks":  systematic,
+        "summary_table":          summary_table,
+    }
+
+
+def print_report(report: dict):
+    print(f"\n{'='*65}")
+    print("YES-BIAS REPORT")
+    print(f"{'='*65}")
+    print(f"{'Benchmark':<30} {'Mean bias':>10} {'Std':>6} {'Direction':<15} Systematic?")
+    print(f"{'-'*65}")
+    for row in report["summary_table"]:
+        sys_str = "⚠️  YES" if row["systematic"] else "✅ no"
+        print(
+            f"{row['benchmark']:<30} "
+            f"{row['mean_bias']:>+10.4f} "
+            f"{row['std_bias']:>6.4f} "
+            f"{row['direction']:<15} "
+            f"{sys_str}"
         )
 
-    return BiasAnalysisReport(
-        entries=entries,
-        summaries=summaries,
-        per_benchmark=per_benchmark,
-    )
+    print(f"\n── Per-model bias stability (across benchmarks) ──")
+    print(f"{'Model':<28} {'Mean bias':>10} {'Std':>6} {'Range':>6}")
+    print(f"{'-'*55}")
+    for model, s in report["bias_stability"].items():
+        print(
+            f"{model:<28} "
+            f"{s['mean_bias']:>+10.4f} "
+            f"{s['std_bias']:>6.4f} "
+            f"{s['range']:>6.4f}"
+        )
 
-
-def bias_analysis_from_evaluator(results_dir: str) -> BiasAnalysisReport:
-    """Load from JSONL results directory and run bias analysis."""
-    from eval.evaluator import batch_evaluate  # noqa: PLC0415
-    raw = batch_evaluate(results_dir)
-    return compute_bias_analysis(raw)
+    print(f"\nSystematic bias benchmarks: {report['systematic_benchmarks']}")
 
 
 # ---------------------------------------------------------------------------
 # CLI
 # ---------------------------------------------------------------------------
 
-if __name__ == "__main__":
-    import argparse, json
-
-    parser = argparse.ArgumentParser(description="Yes-bias distribution analysis.")
-    parser.add_argument("results_dir", help="Directory containing JSONL inference results.")
-    parser.add_argument("--benchmarks", nargs="+", default=None)
-    parser.add_argument("--json", action="store_true")
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--results-dir", default="results/predictions")
+    parser.add_argument("--benchmarks",  nargs="*", default=None)
+    parser.add_argument("--output",      default="reports/module1_bias.json")
     args = parser.parse_args()
 
-    report = bias_analysis_from_evaluator(args.results_dir)
+    results_dir = Path(args.results_dir)
+    output_path = Path(args.output)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
 
-    if args.json:
-        out = {
-            "summaries": {
-                m: {
-                    "mean_bias": s.mean_bias,
-                    "std_bias": s.std_bias,
-                    "max_abs_bias": s.max_abs_bias,
-                    "worst_benchmark": s.worst_benchmark,
-                    "overall_level": s.overall_level,
-                    "overall_direction": s.overall_direction,
-                }
-                for m, s in report.summaries.items()
-            },
-            "entries": [
-                {
-                    "model": e.model,
-                    "benchmark": e.benchmark,
-                    "yes_rate": e.yes_rate,
-                    "yes_bias": e.yes_bias,
-                    "level": e.level,
-                    "direction": e.direction,
-                }
-                for e in report.entries
-            ],
-        }
-        print(json.dumps(out, indent=2))
-    else:
-        report.print()
+    report = run(results_dir, args.benchmarks)
+    print_report(report)
+
+    with open(output_path, "w") as f:
+        json.dump(report, f, indent=2)
+    print(f"\nSaved → {output_path}")
+
+
+if __name__ == "__main__":
+    main()

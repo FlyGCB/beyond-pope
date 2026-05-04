@@ -1,0 +1,11 @@
+{
+  "model": "llama32v_11b",
+  "benchmark": "repope_popular",
+  "n_total": 2727,
+  "n_valid": 2725,
+  "n_unknown": 2,
+  "accuracy": 0.8969,
+  "yes_rate": 0.5064,
+  "latency_mean_ms": 469.6,
+  "wall_time_s": 1614.3
+}

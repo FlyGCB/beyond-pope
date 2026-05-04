@@ -1,0 +1,307 @@
+{
+  "metric": "accuracy",
+  "benchmarks_analysed": [
+    "dashb",
+    "pope_adversarial",
+    "repope_adversarial"
+  ],
+  "rankings": {
+    "dashb": [
+      [
+        1,
+        "paligemma2_3b",
+        0.7987
+      ],
+      [
+        2,
+        "internvl2_8b",
+        0.7125
+      ],
+      [
+        3,
+        "phi35v_4b",
+        0.695
+      ],
+      [
+        4,
+        "qwen2vl_7b",
+        0.6655
+      ],
+      [
+        5,
+        "llava_ov_7b",
+        0.6279
+      ],
+      [
+        6,
+        "llama32v_11b",
+        0.5377
+      ]
+    ],
+    "pope_adversarial": [
+      [
+        1,
+        "llava_ov_7b",
+        0.8783
+      ],
+      [
+        2,
+        "qwen2vl_7b",
+        0.8682
+      ],
+      [
+        3,
+        "llama32v_11b",
+        0.8363
+      ],
+      [
+        4,
+        "internvl2_8b",
+        0.83
+      ],
+      [
+        5,
+        "phi35v_4b",
+        0.8043
+      ],
+      [
+        6,
+        "paligemma2_3b",
+        0.7113
+      ],
+      [
+        7,
+        "deepseekvl2_small",
+        0.5
+      ]
+    ],
+    "repope_adversarial": [
+      [
+        1,
+        "llava_ov_7b",
+        0.9288
+      ],
+      [
+        2,
+        "qwen2vl_7b",
+        0.9109
+      ],
+      [
+        3,
+        "paligemma2_3b",
+        0.8808
+      ],
+      [
+        4,
+        "llama32v_11b",
+        0.8595
+      ],
+      [
+        5,
+        "internvl2_8b",
+        0.8569
+      ],
+      [
+        6,
+        "phi35v_4b",
+        0.8498
+      ]
+    ]
+  },
+  "pairwise_rho": {
+    "dashb__pope_adversarial": {
+      "benchmark_a": "dashb",
+      "benchmark_b": "pope_adversarial",
+      "rho": -0.7714,
+      "n_common": 6,
+      "common_models": [
+        "internvl2_8b",
+        "llama32v_11b",
+        "llava_ov_7b",
+        "paligemma2_3b",
+        "phi35v_4b",
+        "qwen2vl_7b"
+      ],
+      "interpretation": "highly unstable \u2014 rankings unreliable",
+      "rank_changes": {
+        "internvl2_8b": {
+          "rank_a": 2,
+          "rank_b": 4,
+          "delta": -2,
+          "score_a": 0.7125,
+          "score_b": 0.83
+        },
+        "llama32v_11b": {
+          "rank_a": 6,
+          "rank_b": 3,
+          "delta": 3,
+          "score_a": 0.5377,
+          "score_b": 0.8363
+        },
+        "llava_ov_7b": {
+          "rank_a": 5,
+          "rank_b": 1,
+          "delta": 4,
+          "score_a": 0.6279,
+          "score_b": 0.8783
+        },
+        "paligemma2_3b": {
+          "rank_a": 1,
+          "rank_b": 6,
+          "delta": -5,
+          "score_a": 0.7987,
+          "score_b": 0.7113
+        },
+        "phi35v_4b": {
+          "rank_a": 3,
+          "rank_b": 5,
+          "delta": -2,
+          "score_a": 0.695,
+          "score_b": 0.8043
+        },
+        "qwen2vl_7b": {
+          "rank_a": 4,
+          "rank_b": 2,
+          "delta": 2,
+          "score_a": 0.6655,
+          "score_b": 0.8682
+        }
+      }
+    },
+    "dashb__repope_adversarial": {
+      "benchmark_a": "dashb",
+      "benchmark_b": "repope_adversarial",
+      "rho": -0.3143,
+      "n_common": 6,
+      "common_models": [
+        "internvl2_8b",
+        "llama32v_11b",
+        "llava_ov_7b",
+        "paligemma2_3b",
+        "phi35v_4b",
+        "qwen2vl_7b"
+      ],
+      "interpretation": "highly unstable \u2014 rankings unreliable",
+      "rank_changes": {
+        "internvl2_8b": {
+          "rank_a": 2,
+          "rank_b": 5,
+          "delta": -3,
+          "score_a": 0.7125,
+          "score_b": 0.8569
+        },
+        "llama32v_11b": {
+          "rank_a": 6,
+          "rank_b": 4,
+          "delta": 2,
+          "score_a": 0.5377,
+          "score_b": 0.8595
+        },
+        "llava_ov_7b": {
+          "rank_a": 5,
+          "rank_b": 1,
+          "delta": 4,
+          "score_a": 0.6279,
+          "score_b": 0.9288
+        },
+        "paligemma2_3b": {
+          "rank_a": 1,
+          "rank_b": 3,
+          "delta": -2,
+          "score_a": 0.7987,
+          "score_b": 0.8808
+        },
+        "phi35v_4b": {
+          "rank_a": 3,
+          "rank_b": 6,
+          "delta": -3,
+          "score_a": 0.695,
+          "score_b": 0.8498
+        },
+        "qwen2vl_7b": {
+          "rank_a": 4,
+          "rank_b": 2,
+          "delta": 2,
+          "score_a": 0.6655,
+          "score_b": 0.9109
+        }
+      }
+    },
+    "pope_adversarial__repope_adversarial": {
+      "benchmark_a": "pope_adversarial",
+      "benchmark_b": "repope_adversarial",
+      "rho": 0.6571,
+      "n_common": 6,
+      "common_models": [
+        "internvl2_8b",
+        "llama32v_11b",
+        "llava_ov_7b",
+        "paligemma2_3b",
+        "phi35v_4b",
+        "qwen2vl_7b"
+      ],
+      "interpretation": "unstable \u2014 annotation/difficulty effects present",
+      "rank_changes": {
+        "internvl2_8b": {
+          "rank_a": 4,
+          "rank_b": 5,
+          "delta": -1,
+          "score_a": 0.83,
+          "score_b": 0.8569
+        },
+        "llama32v_11b": {
+          "rank_a": 3,
+          "rank_b": 4,
+          "delta": -1,
+          "score_a": 0.8363,
+          "score_b": 0.8595
+        },
+        "llava_ov_7b": {
+          "rank_a": 1,
+          "rank_b": 1,
+          "delta": 0,
+          "score_a": 0.8783,
+          "score_b": 0.9288
+        },
+        "paligemma2_3b": {
+          "rank_a": 6,
+          "rank_b": 3,
+          "delta": 3,
+          "score_a": 0.7113,
+          "score_b": 0.8808
+        },
+        "phi35v_4b": {
+          "rank_a": 5,
+          "rank_b": 6,
+          "delta": -1,
+          "score_a": 0.8043,
+          "score_b": 0.8498
+        },
+        "qwen2vl_7b": {
+          "rank_a": 2,
+          "rank_b": 2,
+          "delta": 0,
+          "score_a": 0.8682,
+          "score_b": 0.9109
+        }
+      }
+    }
+  },
+  "rho_summary": [
+    {
+      "pair": "dashb__pope_adversarial",
+      "rho": -0.7714,
+      "interpretation": "highly unstable \u2014 rankings unreliable"
+    },
+    {
+      "pair": "dashb__repope_adversarial",
+      "rho": -0.3143,
+      "interpretation": "highly unstable \u2014 rankings unreliable"
+    },
+    {
+      "pair": "pope_adversarial__repope_adversarial",
+      "rho": 0.6571,
+      "interpretation": "unstable \u2014 annotation/difficulty effects present"
+    }
+  ]
+}

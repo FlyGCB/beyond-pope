@@ -1,0 +1,11 @@
+{
+  "model": "paligemma2_3b",
+  "benchmark": "repope_random",
+  "n_total": 2774,
+  "n_valid": 2774,
+  "n_unknown": 0,
+  "accuracy": 0.898,
+  "yes_rate": 0.3273,
+  "latency_mean_ms": 124.8,
+  "wall_time_s": 433.6
+}
