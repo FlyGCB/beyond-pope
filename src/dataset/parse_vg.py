@@ -163,7 +163,7 @@ def parse_attributes(
             continue
 
         for obj in image.get("attributes", []):
-            obj_name = obj.get("names", [""])[0].lower().strip()
+            obj_name = (obj.get("name") or (obj.get("names") or [""])[0]).lower().strip()
             coco_class = _match_coco_class(obj_name)
             if coco_class is None:
                 skipped["no_coco_class"] += 1
@@ -255,8 +255,8 @@ def parse_relations(
             subj = rel["subject"]
             obj  = rel["object"]
 
-            subj_name = subj.get("names", [""])[0].lower().strip()
-            obj_name  = obj.get("names",  [""])[0].lower().strip()
+            subj_name = (subj.get("name") or (subj.get("names") or [""])[0]).lower().strip()
+            obj_name  = (obj.get("name")  or (obj.get("names")  or [""])[0]).lower().strip()
 
             subj_coco = _match_coco_class(subj_name)
             obj_coco  = _match_coco_class(obj_name)

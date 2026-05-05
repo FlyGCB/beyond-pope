@@ -1,68 +1,68 @@
 [
   {
     "model": "qwen2vl_7b",
-    "benchmark": "repope_popular",
-    "n_total": 2727,
-    "n_valid": 2725,
-    "n_unknown": 2,
-    "accuracy": 0.9259,
-    "yes_rate": 0.447,
-    "latency_mean_ms": 279.6,
-    "wall_time_s": 915.7
+    "benchmark": "xpope_relation",
+    "n_total": 1403,
+    "n_valid": 1403,
+    "n_unknown": 0,
+    "accuracy": 0.6907,
+    "yes_rate": 0.7455,
+    "latency_mean_ms": 215.0,
+    "wall_time_s": 444.5
   },
   {
     "model": "internvl2_8b",
-    "benchmark": "repope_popular",
-    "n_total": 2727,
-    "n_valid": 2727,
+    "benchmark": "xpope_relation",
+    "n_total": 1403,
+    "n_valid": 1403,
     "n_unknown": 0,
-    "accuracy": 0.8966,
-    "yes_rate": 0.5035,
-    "latency_mean_ms": 305.3,
-    "wall_time_s": 1008.3
+    "accuracy": 0.7213,
+    "yes_rate": 0.6379,
+    "latency_mean_ms": 206.4,
+    "wall_time_s": 531.0
   },
   {
     "model": "llava_ov_7b",
-    "benchmark": "repope_popular",
-    "n_total": 2727,
-    "n_valid": 2727,
+    "benchmark": "xpope_relation",
+    "n_total": 1403,
+    "n_valid": 1403,
     "n_unknown": 0,
-    "accuracy": 0.9351,
-    "yes_rate": 0.4122,
-    "latency_mean_ms": 446.8,
-    "wall_time_s": 1354.7
+    "accuracy": 0.7035,
+    "yes_rate": 0.7042,
+    "latency_mean_ms": 446.1,
+    "wall_time_s": 742.4
   },
   {
     "model": "llama32v_11b",
-    "benchmark": "repope_popular",
-    "n_total": 2727,
-    "n_valid": 2725,
-    "n_unknown": 2,
-    "accuracy": 0.8969,
-    "yes_rate": 0.5064,
-    "latency_mean_ms": 469.6,
-    "wall_time_s": 1614.3
+    "benchmark": "xpope_relation",
+    "n_total": 1403,
+    "n_valid": 1403,
+    "n_unknown": 0,
+    "accuracy": 0.7063,
+    "yes_rate": 0.623,
+    "latency_mean_ms": 394.9,
+    "wall_time_s": 682.8
   },
   {
     "model": "paligemma2_3b",
-    "benchmark": "repope_popular",
-    "n_total": 2727,
-    "n_valid": 2727,
+    "benchmark": "xpope_relation",
+    "n_total": 1403,
+    "n_valid": 1403,
     "n_unknown": 0,
-    "accuracy": 0.883,
-    "yes_rate": 0.3374,
-    "latency_mean_ms": 130.7,
-    "wall_time_s": 489.3
+    "accuracy": 0.623,
+    "yes_rate": 0.8689,
+    "latency_mean_ms": 123.2,
+    "wall_time_s": 267.0
   },
   {
     "model": "phi35v_4b",
-    "benchmark": "repope_popular",
-    "n_total": 2727,
-    "n_valid": 2726,
-    "n_unknown": 1,
-    "accuracy": 0.8665,
-    "yes_rate": 0.3591,
-    "latency_mean_ms": 404.0,
-    "wall_time_s": 1189.7
+    "benchmark": "xpope_relation",
+    "n_total": 1403,
+    "n_valid": 1403,
+    "n_unknown": 0,
+    "accuracy": 0.6486,
+    "yes_rate": 0.8703,
+    "latency_mean_ms": 329.5,
+    "wall_time_s": 548.4
   }
 ]

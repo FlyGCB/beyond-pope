@@ -1,0 +1,11 @@
+{
+  "model": "internvl2_8b",
+  "benchmark": "xpope_relation",
+  "n_total": 1403,
+  "n_valid": 1403,
+  "n_unknown": 0,
+  "accuracy": 0.7213,
+  "yes_rate": 0.6379,
+  "latency_mean_ms": 206.4,
+  "wall_time_s": 531.0
+}

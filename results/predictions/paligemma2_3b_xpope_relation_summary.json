@@ -1,0 +1,11 @@
+{
+  "model": "paligemma2_3b",
+  "benchmark": "xpope_relation",
+  "n_total": 1403,
+  "n_valid": 1403,
+  "n_unknown": 0,
+  "accuracy": 0.623,
+  "yes_rate": 0.8689,
+  "latency_mean_ms": 123.2,
+  "wall_time_s": 267.0
+}
