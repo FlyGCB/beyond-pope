@@ -3,19 +3,19 @@ saturation_diag.py
 ------------------
 Module 1: Quantify POPE saturation using Coefficient of Variation (CV).
 
-CV = std / mean across model accuracy/F1 scores on the same benchmark.
+CV = std / mean across model accuracy scores on the same benchmark.
 Low CV (≤ 0.02) → models cluster at ceiling → benchmark cannot rank them.
+
+Key finding: POPE is saturated for 7B+ models (CV ≤ 0.014 on popular/random),
+but this signal is masked when smaller models (3B/4B) are included.
 
 Usage
 -----
     python -m src.analysis.saturation_diag \
         --results-dir results/predictions \
-        --output reports/module1_saturation.json
-
-    # Compare specific benchmarks
-    python -m src.analysis.saturation_diag \
-        --results-dir results/predictions \
         --benchmarks pope_adversarial pope_popular pope_random dashb \
+        --model-groups "7B+:qwen2vl_7b,internvl2_8b,llava_ov_7b,llama32v_11b" \
+                       "all:qwen2vl_7b,internvl2_8b,llava_ov_7b,llama32v_11b,paligemma2_3b,phi35v_4b" \
         --output reports/module1_saturation.json
 """
 
@@ -28,7 +28,6 @@ from collections import defaultdict
 
 import numpy as np
 
-# CV threshold below which a benchmark is declared saturated
 SATURATION_THRESHOLD = 0.02
 
 
@@ -37,7 +36,6 @@ SATURATION_THRESHOLD = 0.02
 # ---------------------------------------------------------------------------
 
 def load_summaries(results_dir: Path) -> list[dict]:
-    """Load all *_summary.json files from results_dir."""
     summaries = []
     for path in sorted(results_dir.glob("*_summary.json")):
         if path.name.startswith("_"):
@@ -48,11 +46,22 @@ def load_summaries(results_dir: Path) -> list[dict]:
 
 
 def group_by_benchmark(summaries: list[dict]) -> dict[str, list[dict]]:
-    """Group summary records by benchmark name."""
     groups: dict[str, list[dict]] = defaultdict(list)
     for s in summaries:
         groups[s["benchmark"]].append(s)
     return dict(groups)
+
+
+def parse_model_groups(raw: list[str]) -> dict[str, list[str]]:
+    """
+    Parse --model-groups arguments.
+    Format: "group_name:model1,model2,model3"
+    """
+    groups = {}
+    for item in raw:
+        name, models_str = item.split(":", 1)
+        groups[name.strip()] = [m.strip() for m in models_str.split(",")]
+    return groups
 
 
 # ---------------------------------------------------------------------------
@@ -60,7 +69,6 @@ def group_by_benchmark(summaries: list[dict]) -> dict[str, list[dict]]:
 # ---------------------------------------------------------------------------
 
 def cv(scores: list[float]) -> float:
-    """Coefficient of Variation = std / mean (population std)."""
     arr = np.array(scores)
     mean = arr.mean()
     return float(arr.std() / mean) if mean > 0 else 0.0
@@ -69,26 +77,15 @@ def cv(scores: list[float]) -> float:
 def saturation_for_benchmark(
     records: list[dict],
     metric: str = "accuracy",
+    model_filter: list[str] | None = None,
 ) -> dict:
-    """
-    Compute saturation diagnostics for one benchmark across all models.
-
-    Parameters
-    ----------
-    records : list of summary dicts for the same benchmark
-    metric  : 'accuracy' or 'yes_rate'
-
-    Returns
-    -------
-    {
-        benchmark, metric, n_models,
-        scores: {model: score},
-        mean, std, cv, max_gap,
-        saturated: bool,
-        ranking: [model sorted best→worst]
+    scores = {
+        r["model"]: r[metric]
+        for r in records
+        if metric in r
+        and (model_filter is None or r["model"] in model_filter)
+        and r.get("n_unknown", 0) < r.get("n_total", 1)
     }
-    """
-    scores = {r["model"]: r[metric] for r in records if metric in r}
     vals = list(scores.values())
 
     if len(vals) < 2:
@@ -96,7 +93,6 @@ def saturation_for_benchmark(
 
     arr = np.array(vals)
     cv_val = cv(vals)
-
     ranking = sorted(scores, key=scores.get, reverse=True)
 
     return {
@@ -121,25 +117,15 @@ def run(
     results_dir: Path,
     benchmarks: list[str] | None = None,
     metric: str = "accuracy",
+    model_groups: dict[str, list[str]] | None = None,
 ) -> dict:
-    """
-    Run saturation diagnostics across all benchmarks.
-
-    Returns
-    -------
-    {
-        "per_benchmark": {benchmark: saturation_dict},
-        "summary_table": [{benchmark, cv, mean, max_gap, saturated}],
-        "saturated_benchmarks": [str],
-        "threshold": float,
-    }
-    """
     summaries = load_summaries(results_dir)
     groups = group_by_benchmark(summaries)
 
     if benchmarks:
         groups = {k: v for k, v in groups.items() if k in benchmarks}
 
+    # All-model analysis
     per_benchmark = {}
     for bm, records in sorted(groups.items()):
         per_benchmark[bm] = saturation_for_benchmark(records, metric)
@@ -155,14 +141,42 @@ def run(
         }
         for bm, d in per_benchmark.items()
     ]
-    # Sort by CV ascending (most saturated first)
     summary_table.sort(key=lambda x: x["cv"] or 999)
-
     saturated = [d["benchmark"] for d in summary_table if d.get("saturated")]
+
+    # Per-group analysis
+    per_group = {}
+    group_summary_tables = {}
+
+    if model_groups:
+        for group_name, model_list in model_groups.items():
+            group_per_bm = {}
+            for bm, records in sorted(groups.items()):
+                group_per_bm[bm] = saturation_for_benchmark(
+                    records, metric, model_filter=model_list
+                )
+            per_group[group_name] = group_per_bm
+
+            tbl = [
+                {
+                    "benchmark": bm,
+                    "cv":        d.get("cv"),
+                    "mean":      d.get("mean"),
+                    "std":       d.get("std"),
+                    "max_gap":   d.get("max_gap"),
+                    "saturated": d.get("saturated"),
+                    "models":    model_list,
+                }
+                for bm, d in group_per_bm.items()
+            ]
+            tbl.sort(key=lambda x: x["cv"] or 999)
+            group_summary_tables[group_name] = tbl
 
     return {
         "per_benchmark":        per_benchmark,
+        "per_group":            per_group,
         "summary_table":        summary_table,
+        "group_summary_tables": group_summary_tables,
         "saturated_benchmarks": saturated,
         "threshold_cv":         SATURATION_THRESHOLD,
         "metric":               metric,
@@ -170,21 +184,43 @@ def run(
 
 
 def print_report(report: dict):
-    print(f"\n{'='*60}")
-    print(f"SATURATION REPORT  (metric={report['metric']}, threshold CV≤{report['threshold_cv']})")
-    print(f"{'='*60}")
-    print(f"{'Benchmark':<30} {'CV':>6} {'Mean':>6} {'Gap':>6} {'Saturated'}")
-    print(f"{'-'*60}")
+    thresh = report["threshold_cv"]
+    metric = report["metric"]
+
+    print(f"\n{'='*65}")
+    print(f"SATURATION REPORT  (metric={metric}, threshold CV≤{thresh})")
+    print(f"{'='*65}")
+
+    print(f"\n── All models ──")
+    print(f"{'Benchmark':<30} {'CV':>7} {'Mean':>7} {'Gap':>7} {'N':>3}  Saturated")
+    print(f"{'-'*65}")
     for row in report["summary_table"]:
         sat = "✅ YES" if row["saturated"] else "❌ no"
+        n = report["per_benchmark"].get(row["benchmark"], {}).get("n_models", "?")
         print(
             f"{row['benchmark']:<30} "
-            f"{row['cv']:>6.4f} "
-            f"{row['mean']:>6.4f} "
-            f"{row['max_gap']:>6.4f} "
-            f"{sat}"
+            f"{row['cv']:>7.4f} "
+            f"{row['mean']:>7.4f} "
+            f"{row['max_gap']:>7.4f} "
+            f"{n:>3}  {sat}"
         )
-    print(f"\nSaturated benchmarks: {report['saturated_benchmarks']}")
+
+    for group_name, tbl in report.get("group_summary_tables", {}).items():
+        print(f"\n── Model group: {group_name} ──")
+        print(f"{'Benchmark':<30} {'CV':>7} {'Mean':>7} {'Gap':>7} {'N':>3}  Saturated")
+        print(f"{'-'*65}")
+        for row in tbl:
+            sat = "✅ YES" if row["saturated"] else "❌ no"
+            n = len(row.get("models", []))
+            print(
+                f"{row['benchmark']:<30} "
+                f"{row['cv']:>7.4f} "
+                f"{row['mean']:>7.4f} "
+                f"{row['max_gap']:>7.4f} "
+                f"{n:>3}  {sat}"
+            )
+
+    print(f"\nSaturated benchmarks (all models): {report['saturated_benchmarks']}")
 
 
 # ---------------------------------------------------------------------------
@@ -194,18 +230,24 @@ def print_report(report: dict):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--results-dir", default="results/predictions")
-    parser.add_argument("--benchmarks",  nargs="*", default=None,
-                        help="Subset of benchmarks to analyse (default: all)")
+    parser.add_argument("--benchmarks",  nargs="*", default=None)
     parser.add_argument("--metric",      default="accuracy",
                         choices=["accuracy", "yes_rate"])
-    parser.add_argument("--output",      default="reports/module1_saturation.json")
+    parser.add_argument(
+        "--model-groups", nargs="*", default=None,
+        metavar="NAME:model1,model2,...",
+        help="Named model subsets. Format: 'GroupName:model1,model2,model3'",
+    )
+    parser.add_argument("--output", default="reports/module1_saturation.json")
     args = parser.parse_args()
 
     results_dir = Path(args.results_dir)
     output_path = Path(args.output)
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
-    report = run(results_dir, args.benchmarks, args.metric)
+    model_groups = parse_model_groups(args.model_groups) if args.model_groups else None
+
+    report = run(results_dir, args.benchmarks, args.metric, model_groups)
     print_report(report)
 
     with open(output_path, "w") as f:
