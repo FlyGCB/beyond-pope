@@ -1,11 +1,11 @@
 {
   "model": "qwen2vl_7b",
   "benchmark": "xpope_relation",
-  "n_total": 1403,
-  "n_valid": 1403,
+  "n_total": 1618,
+  "n_valid": 1618,
   "n_unknown": 0,
-  "accuracy": 0.6907,
-  "yes_rate": 0.7455,
-  "latency_mean_ms": 215.0,
-  "wall_time_s": 444.5
+  "accuracy": 0.7553,
+  "yes_rate": 0.6007,
+  "latency_mean_ms": 275.7,
+  "wall_time_s": 2165.6
 }

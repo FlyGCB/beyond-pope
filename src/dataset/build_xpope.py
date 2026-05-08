@@ -125,8 +125,9 @@ def main():
     relation = build_relation_split(
         records=rel_records,
         target_pos=900,
-        target_neg_a=450,
-        target_neg_b=450,
+        target_neg_a=300,
+        target_neg_b=300,
+        target_neg_c=300,
         max_per_image=6,
     )
     rel_path = output_dir / "xpope_relation.jsonl"

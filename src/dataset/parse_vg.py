@@ -27,7 +27,6 @@ VALID_ATTRIBUTE_TYPES = {
         "red", "blue", "green", "yellow", "white", "black", "brown",
         "orange", "purple", "pink", "gray", "grey", "silver", "gold",
         "beige", "tan", "navy",
-        # "dark" and "light" removed — they are brightness, not color
     },
     "brightness": {
         "dark", "light", "bright", "dim",
@@ -71,8 +70,41 @@ COCO_CLASSES = {
     "scissors", "teddy bear", "hair drier", "toothbrush",
 }
 
-# Sorted by length descending so longer phrases match before substrings
-# e.g. "dining table" matches before "table"
+# Extended mapping: common VG natural-language words → COCO class
+# This dramatically increases relation coverage since VG uses natural language
+EXTENDED_CLASS_MAP = {
+    # person variants
+    "man": "person", "woman": "person", "boy": "person", "girl": "person",
+    "child": "person", "kid": "person", "baby": "person", "people": "person",
+    "player": "person", "rider": "person", "skater": "person", "surfer": "person",
+    "biker": "person", "cyclist": "person", "pedestrian": "person",
+    "guy": "person", "lady": "person", "male": "person", "female": "person",
+    "skier": "person", "snowboarder": "person", "swimmer": "person",
+    "hiker": "person", "runner": "person", "walker": "person",
+    # vehicle variants
+    "vehicle": "car", "automobile": "car", "sedan": "car", "suv": "car",
+    "van": "car", "pickup": "truck", "lorry": "truck",
+    "motorbike": "motorcycle", "moped": "motorcycle", "scooter": "motorcycle",
+    "jet": "airplane", "plane": "airplane", "aircraft": "airplane",
+    "vessel": "boat", "sailboat": "boat", "canoe": "boat", "kayak": "boat",
+    # animal variants
+    "dogs": "dog", "puppy": "dog", "cats": "cat", "kitten": "cat",
+    "horses": "horse", "cows": "cow", "birds": "bird",
+    "elephants": "elephant", "bears": "bear", "zebras": "zebra",
+    "giraffes": "giraffe",
+    # furniture / objects
+    "sofa": "couch", "settee": "couch", "loveseat": "couch",
+    "table": "dining table", "desk": "dining table",
+    "monitor": "tv", "television": "tv", "screen": "tv",
+    "computer": "laptop", "notebook": "laptop",
+    "phone": "cell phone", "cellphone": "cell phone", "smartphone": "cell phone",
+    "mug": "cup", "glass": "cup",
+    "bag": "backpack", "purse": "handbag",
+    "plant": "potted plant",
+    "fridge": "refrigerator",
+}
+
+# Sorted by length descending — longer phrases match before substrings
 _COCO_CLASSES_SORTED = sorted(COCO_CLASSES, key=len, reverse=True)
 
 VALID_RELATIONS = {
@@ -80,47 +112,44 @@ VALID_RELATIONS = {
     "on", "in", "on top of", "next to", "beside", "near", "above",
     "below", "behind", "in front of", "under", "underneath", "inside",
     "outside", "across from", "along",
-    # "at" and "around" removed — too ambiguous
     # Functional
     "holding", "wearing", "carrying", "sitting on", "standing on",
     "riding", "eating", "drinking", "using", "playing with",
     "attached to", "hanging from", "leaning on", "lying on",
+    # Extended — unambiguous spatial/functional meaning
+    "touching", "facing", "looking at", "walking on", "running on",
+    "parked on", "mounted on", "flying over", "jumping over",
+    "pulling", "pushing", "kicking", "throwing", "catching",
+    "adjacent to", "surrounding", "covering",
 }
 
 
 # ── COCO image ID lookup ──────────────────────────────────────────────────────
 
 def load_coco_image_ids(coco_dir: Path) -> set[int]:
-    """Return the set of COCO val2014 image IDs."""
     ann_file = coco_dir / "annotations" / "instances_val2014.json"
     if not ann_file.exists():
         print(f"[warn] COCO annotations not found at {ann_file}")
         print("       Skipping COCO filter — all VG images will be used.")
         return set()
-
     with open(ann_file) as f:
         coco = json.load(f)
-
     ids = {img["id"] for img in coco["images"]}
     print(f"Loaded {len(ids):,} COCO val2014 image IDs")
     return ids
 
 
 def load_vg_coco_mapping(vg_dir: Path) -> dict[int, int]:
-    """Returns {vg_image_id: coco_image_id} for images in both datasets."""
     image_data_file = vg_dir / "image_data.json"
     if not image_data_file.exists():
         print(f"[warn] image_data.json not found — skipping COCO alignment")
         return {}
-
     with open(image_data_file) as f:
         image_data = json.load(f)
-
     mapping = {}
     for img in image_data:
         if img.get("coco_id"):
             mapping[img["image_id"]] = img["coco_id"]
-
     print(f"VG→COCO mapping: {len(mapping):,} images have COCO IDs")
     return mapping
 
@@ -132,20 +161,6 @@ def parse_attributes(
     coco_image_ids: set[int],
     vg_coco_map: dict[int, int],
 ) -> list[dict]:
-    """
-    Parse VG attributes.json and return clean attribute records.
-
-    Each record:
-    {
-        "vg_image_id":    int,
-        "coco_image_id":  int,      # -1 if not in COCO
-        "object_name":    str,      # normalized COCO class name
-        "attribute":      str,      # e.g. "red"
-        "attribute_type": str,      # "color" / "material" / "size" / "shape" / "brightness"
-        "object_id":      int,
-        "bbox":           [x, y, w, h] | None,
-    }
-    """
     attr_file = vg_dir / "attributes.json"
     print(f"Loading {attr_file} ...")
     with open(attr_file) as f:
@@ -174,7 +189,6 @@ def parse_attributes(
                 skipped["no_attributes"] += 1
                 continue
 
-            # FIX: safe bbox extraction — KeyError guard
             try:
                 bbox = [obj["x"], obj["y"], obj["w"], obj["h"]]
             except KeyError:
@@ -182,11 +196,9 @@ def parse_attributes(
 
             for attr in attrs:
                 attr = attr.lower().strip()
-
                 if attr in SUBJECTIVE_ATTRS:
                     skipped["subjective"] += 1
                     continue
-
                 attr_type = _get_attribute_type(attr)
                 if attr_type is None:
                     skipped["invalid_attr"] += 1
@@ -214,21 +226,6 @@ def parse_relations(
     coco_image_ids: set[int],
     vg_coco_map: dict[int, int],
 ) -> list[dict]:
-    """
-    Parse VG relationships.json and return clean relation records.
-
-    Each record:
-    {
-        "vg_image_id":      int,
-        "coco_image_id":    int,
-        "subject_name":     str,
-        "object_name":      str,
-        "relation":         str,
-        "subject_id":       int,
-        "object_id":        int,
-        "relationship_id":  int,
-    }
-    """
     rel_file = vg_dir / "relationships.json"
     print(f"Loading {rel_file} ...")
     with open(rel_file) as f:
@@ -247,7 +244,6 @@ def parse_relations(
 
         for rel in image.get("relationships", []):
             predicate = rel.get("predicate", "").lower().strip()
-
             if predicate not in VALID_RELATIONS:
                 skipped["invalid_relation"] += 1
                 continue
@@ -265,8 +261,6 @@ def parse_relations(
                 skipped["no_coco_class"] += 1
                 continue
 
-            # FIX: filter on object_id, not class name
-            # "dog on dog" (two different dogs) is valid; same object_id is not
             if subj["object_id"] == obj["object_id"]:
                 skipped["self_relation"] += 1
                 continue
@@ -291,24 +285,31 @@ def parse_relations(
 
 def _match_coco_class(name: str) -> str | None:
     """
-    Match a VG object name to a COCO class using word-boundary regex.
+    Match a VG object name to a COCO class.
 
-    FIX: original substring check caused false matches:
-         "car" in "carrot" → True
-         "cup" in "hiccup" → True
-         "tie" in "necktie" → True
-
-    Classes are checked longest-first so "dining table" matches before "table".
+    Priority:
+    1. Direct match in COCO_CLASSES
+    2. Extended mapping (e.g. "man" → "person")
+    3. Word-boundary regex against COCO class names (longest first)
+    4. Extended map words inside name
     """
     name = name.lower().strip()
+    if not name:
+        return None
 
-    # Direct match first (fast path)
     if name in COCO_CLASSES:
         return name
 
-    # Word-boundary match — longest class names checked first
+    if name in EXTENDED_CLASS_MAP:
+        return EXTENDED_CLASS_MAP[name]
+
     for coco_class in _COCO_CLASSES_SORTED:
         pattern = r'\b' + re.escape(coco_class) + r'\b'
+        if re.search(pattern, name):
+            return coco_class
+
+    for ext_word, coco_class in EXTENDED_CLASS_MAP.items():
+        pattern = r'\b' + re.escape(ext_word) + r'\b'
         if re.search(pattern, name):
             return coco_class
 
@@ -316,7 +317,6 @@ def _match_coco_class(name: str) -> str | None:
 
 
 def _get_attribute_type(attr: str) -> str | None:
-    """Return the attribute type category, or None if not valid."""
     for attr_type, attr_set in VALID_ATTRIBUTE_TYPES.items():
         if attr in attr_set:
             return attr_type
@@ -349,13 +349,26 @@ def print_attribute_stats(records: list[dict]):
 
 
 def print_relation_stats(records: list[dict]):
-    rel_counts = defaultdict(int)
+    rel_counts  = defaultdict(int)
+    subj_counts = defaultdict(int)
+    obj_counts  = defaultdict(int)
+
     for r in records:
         rel_counts[r["relation"]] += 1
+        subj_counts[r["subject_name"]] += 1
+        obj_counts[r["object_name"]] += 1
 
     print("\n── Top 20 relations ──")
     for rel, c in sorted(rel_counts.items(), key=lambda x: -x[1])[:20]:
         print(f"  {rel:<25} {c:>6,}")
+
+    print("\n── Top 10 subjects ──")
+    for s, c in sorted(subj_counts.items(), key=lambda x: -x[1])[:10]:
+        print(f"  {s:<20} {c:>6,}")
+
+    print("\n── Top 10 objects ──")
+    for o, c in sorted(obj_counts.items(), key=lambda x: -x[1])[:10]:
+        print(f"  {o:<20} {c:>6,}")
 
 
 # ── Main ──────────────────────────────────────────────────────────────────────
@@ -372,30 +385,26 @@ def main():
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    coco_ids   = load_coco_image_ids(coco_dir)
+    coco_ids    = load_coco_image_ids(coco_dir)
     vg_coco_map = load_vg_coco_mapping(vg_dir)
 
-    # Parse attributes
     print("\n=== Parsing attributes ===")
     attr_records = parse_attributes(vg_dir, coco_ids, vg_coco_map)
     print_attribute_stats(attr_records)
-
     attr_out = output_dir / "vg_attributes_filtered.json"
     with open(attr_out, "w") as f:
         json.dump(attr_records, f, separators=(',', ':'))
     print(f"\nSaved {len(attr_records):,} attribute records → {attr_out}")
 
-    # Parse relations
     print("\n=== Parsing relations ===")
     rel_records = parse_relations(vg_dir, coco_ids, vg_coco_map)
     print_relation_stats(rel_records)
-
     rel_out = output_dir / "vg_relations_filtered.json"
     with open(rel_out, "w") as f:
         json.dump(rel_records, f, separators=(',', ':'))
     print(f"\nSaved {len(rel_records):,} relation records → {rel_out}")
 
-    print("\nDone. Next step: run src/dataset/build_attribute.py")
+    print("\nDone. Next step: run src/dataset/build_xpope.py")
 
 
 if __name__ == "__main__":
