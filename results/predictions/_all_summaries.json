@@ -2,67 +2,67 @@
   {
     "model": "qwen2vl_7b",
     "benchmark": "xpope_relation",
-    "n_total": 1403,
-    "n_valid": 1403,
+    "n_total": 1618,
+    "n_valid": 1618,
     "n_unknown": 0,
-    "accuracy": 0.6907,
-    "yes_rate": 0.7455,
-    "latency_mean_ms": 215.0,
-    "wall_time_s": 444.5
+    "accuracy": 0.7553,
+    "yes_rate": 0.6007,
+    "latency_mean_ms": 275.7,
+    "wall_time_s": 2165.6
   },
   {
     "model": "internvl2_8b",
     "benchmark": "xpope_relation",
-    "n_total": 1403,
-    "n_valid": 1403,
+    "n_total": 1618,
+    "n_valid": 1618,
     "n_unknown": 0,
-    "accuracy": 0.7213,
-    "yes_rate": 0.6379,
-    "latency_mean_ms": 206.4,
-    "wall_time_s": 531.0
+    "accuracy": 0.8053,
+    "yes_rate": 0.5334,
+    "latency_mean_ms": 233.4,
+    "wall_time_s": 751.9
   },
   {
     "model": "llava_ov_7b",
     "benchmark": "xpope_relation",
-    "n_total": 1403,
-    "n_valid": 1403,
+    "n_total": 1618,
+    "n_valid": 1618,
     "n_unknown": 0,
-    "accuracy": 0.7035,
-    "yes_rate": 0.7042,
-    "latency_mean_ms": 446.1,
-    "wall_time_s": 742.4
+    "accuracy": 0.788,
+    "yes_rate": 0.5643,
+    "latency_mean_ms": 659.3,
+    "wall_time_s": 8491.5
   },
   {
     "model": "llama32v_11b",
     "benchmark": "xpope_relation",
-    "n_total": 1403,
-    "n_valid": 1403,
+    "n_total": 1618,
+    "n_valid": 1618,
     "n_unknown": 0,
-    "accuracy": 0.7063,
-    "yes_rate": 0.623,
-    "latency_mean_ms": 394.9,
-    "wall_time_s": 682.8
+    "accuracy": 0.7824,
+    "yes_rate": 0.5093,
+    "latency_mean_ms": 5775.2,
+    "wall_time_s": 9459.7
   },
   {
     "model": "paligemma2_3b",
     "benchmark": "xpope_relation",
-    "n_total": 1403,
-    "n_valid": 1403,
+    "n_total": 1618,
+    "n_valid": 1618,
     "n_unknown": 0,
-    "accuracy": 0.623,
-    "yes_rate": 0.8689,
-    "latency_mean_ms": 123.2,
-    "wall_time_s": 267.0
+    "accuracy": 0.7077,
+    "yes_rate": 0.7188,
+    "latency_mean_ms": 162.5,
+    "wall_time_s": 538.6
   },
   {
     "model": "phi35v_4b",
     "benchmark": "xpope_relation",
-    "n_total": 1403,
-    "n_valid": 1403,
+    "n_total": 1618,
+    "n_valid": 1618,
     "n_unknown": 0,
-    "accuracy": 0.6486,
-    "yes_rate": 0.8703,
-    "latency_mean_ms": 329.5,
-    "wall_time_s": 548.4
+    "accuracy": 0.6774,
+    "yes_rate": 0.8109,
+    "latency_mean_ms": 412.2,
+    "wall_time_s": 797.5
   }
 ]
