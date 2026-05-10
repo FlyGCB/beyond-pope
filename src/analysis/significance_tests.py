@@ -400,8 +400,20 @@ def main():
     report = run(results_dir)
     print_report(report)
 
+    class NumpyEncoder(json.JSONEncoder):
+        def default(self, obj):
+            if isinstance(obj, np.bool_):
+                return bool(obj)
+            if isinstance(obj, np.integer):
+                return int(obj)
+            if isinstance(obj, np.floating):
+                return float(obj)
+            if isinstance(obj, np.ndarray):
+                return obj.tolist()
+            return super().default(obj)
+
     with open(output_path, "w") as f:
-        json.dump(report, f, indent=2)
+        json.dump(report, f, indent=2, cls=NumpyEncoder)
     print(f"\nSaved → {output_path}")
 
 

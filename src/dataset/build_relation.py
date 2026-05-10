@@ -188,7 +188,7 @@ def make_negative_type_c(
     """
     pool = rel_object_pool.get(record["relation"], [])
     # Filter out the actual object in this image
-    candidates = [o for o in pool if o != record["object_name"]]
+    candidates = [o for o in pool if o != record["object_name"] and o != record["subject_name"]]
     if not candidates:
         return None
 
