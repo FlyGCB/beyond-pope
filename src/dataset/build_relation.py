@@ -107,8 +107,11 @@ def make_positive(record: dict, qid: int) -> dict:
     }
 
 
-def make_negative_type_a(record: dict, qid: int) -> dict:
+def make_negative_type_a(record: dict, qid: int) -> dict | None:
     """Type A: reversed — swap subject and object."""
+    # Skip if subject and object are the same class (self-reference after swap)
+    if record['subject_name'] == record['object_name']:
+        return None
     return {
         "question_id":  f"rel_{qid:05d}",
         "image":        COCO_FILENAME.format(record["coco_image_id"]),
@@ -134,19 +137,21 @@ def make_negative_type_b(
     Type B: wrong object pair from the same image.
     Subject stays the same, object comes from a different relation in the image.
     """
-    # Prefer same subject, different object
+    # Prefer same subject, different object (and not same as subject)
     candidates = [
         r for r in image_records
         if r["relationship_id"] != record["relationship_id"]
         and r["object_name"] != record["object_name"]
+        and r["object_name"] != record["subject_name"]
         and r["subject_name"] == record["subject_name"]
     ]
-    # Fallback: any other relation with a different object
+    # Fallback: any other relation with a different object (and not same as subject)
     if not candidates:
         candidates = [
             r for r in image_records
             if r["relationship_id"] != record["relationship_id"]
             and r["object_name"] != record["object_name"]
+            and r["object_name"] != record["subject_name"]
         ]
     if not candidates:
         return None
@@ -187,8 +192,11 @@ def make_negative_type_c(
     plausible (it genuinely appears with this relation somewhere).
     """
     pool = rel_object_pool.get(record["relation"], [])
-    # Filter out the actual object in this image
-    candidates = [o for o in pool if o != record["object_name"] and o != record["subject_name"]]
+    # Filter out the actual object AND the subject (avoid self-reference)
+    candidates = [
+        o for o in pool
+        if o != record["object_name"] and o != record["subject_name"]
+    ]
     if not candidates:
         return None
 

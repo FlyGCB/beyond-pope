@@ -261,7 +261,7 @@ def parse_relations(
                 skipped["no_coco_class"] += 1
                 continue
 
-            if subj["object_id"] == obj["object_id"]:
+            if subj["object_id"] == obj["object_id"] or subj_coco == obj_coco:
                 skipped["self_relation"] += 1
                 continue
 
