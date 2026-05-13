@@ -8,9 +8,9 @@ A research project demonstrating that POPE — the most widely used VLM hallucin
 
 | Problem | Evidence | Module |
 |---|---|---|
-| POPE is saturated | CV across 6 models = 0.159 on adversarial split | Module 1 |
+| POPE is saturated | CV across 7B+ models ≤ 0.014 on popular/random splits | Module 1 |
 | Annotation errors distort rankings | Spearman ρ (POPE → RePOPE) = 0.657 < 0.7 | Module 2 |
-| Harder benchmarks restore discriminability | CV rises to 0.119 on DASH-B | Module 3 |
+| Harder benchmarks restore discriminability | CV rises to 0.101 on DASH-B (7B+ models) | Module 3 |
 | Existence hallucination is only the tip | Attribute/relation accuracy drops ~20–25% vs existence | Module 4 |
 
 **Conclusion**: POPE is neither accurate (annotation noise), sensitive (saturated), nor complete (dimension coverage). Beyond-POPE proposes a more reliable evaluation framework: RePOPE + DASH-B + X-POPE + H_total.
@@ -45,7 +45,7 @@ A research project demonstrating that POPE — the most widely used VLM hallucin
 | Phi-3.5V-4B | 80.4% | 37.7% | 510 |
 | PaliGemma2-3B | 71.1% | 31.8% | 201 |
 
-CV = 0.159 across all 6 models. CV for 7B+ models only = 0.026, approaching the saturation threshold (≤ 0.02).
+CV (all 6 models) = 0.159. CV (7B+ models only) = 0.024, with pope_popular CV = 0.008 and pope_random CV = 0.014 — both below the saturation threshold (≤ 0.02). Bootstrap 95% CI confirms saturation for 7B+ models on popular and random splits.
 
 ### Module 2 — POPE → RePOPE Ranking Shift
 
@@ -58,11 +58,11 @@ CV = 0.159 across all 6 models. CV for 7B+ models only = 0.026, approaching the 
 | InternVL2-8B | 83.0% | 85.7% | #4 → #5 (↓1) |
 | Phi-3.5V-4B | 80.4% | 85.0% | #5 → #6 (↓1) |
 
-**Spearman ρ (POPE → RePOPE) = 0.657** — rankings are unstable. PaliGemma2 jumps 3 positions after annotation correction, indicating POPE's errors disproportionately penalise smaller models.
+**Spearman ρ (POPE → RePOPE) = 0.657.** McNemar test confirms annotation errors significantly distort results for 3/6 models (p < 0.05). PaliGemma2 jumps 3 positions after correction, indicating POPE's errors disproportionately penalise smaller models.
 
 ### Module 3 — DASH-B Discriminability Recovery (n=2,682)
 
-| Model | POPE Acc | DASH-B Acc | Drop |
+| Model | POPE Acc | DASH-B Acc | Change |
 |---|---|---|---|
 | PaliGemma2-3B | 71.1% | **79.9%** | +8.8% |
 | InternVL2-8B | 83.0% | 71.3% | −11.7% |
@@ -71,7 +71,7 @@ CV = 0.159 across all 6 models. CV for 7B+ models only = 0.026, approaching the 
 | LLaVA-OV-7B | 87.8% | 62.8% | −25.0% |
 | Llama3.2V-11B | 83.6% | 53.8% | −29.8% |
 
-CV on DASH-B = 0.119, vs 0.159 on POPE adversarial — ranking spread fully recovers. Rankings are completely inverted (Spearman ρ = −0.77).
+CV on DASH-B (7B+ models) = 0.101, fully recovering from near-saturation on POPE. Rankings are substantially reshuffled (Spearman ρ = −0.77 between POPE and DASH-B).
 
 ### Module 4 — X-POPE Three-Dimension Evaluation
 
@@ -79,16 +79,18 @@ X-POPE is an original dataset constructed from COCO val2014 + Visual Genome, ext
 
 | Model | Existence | Attribute | Relation | **H_total** |
 |---|---|---|---|---|
-| LLaVA-OV-7B | 94.8% | 74.5% | 70.4% | **0.785** |
-| InternVL2-8B | 94.9% | 71.9% | 72.1% | **0.783** |
-| Llama3.2V-11B | 91.8% | 72.9% | 70.6% | **0.774** |
-| Qwen2-VL-7B | 92.8% | 73.7% | 69.1% | **0.773** |
-| PaliGemma2-3B | 88.9% | 70.6% | 62.3% | **0.724** |
-| Phi-3.5V-4B | 86.8% | 67.1% | 64.9% | **0.717** |
+| LLaVA-OV-7B | 94.8% | 74.5% | — | — |
+| InternVL2-8B | 94.9% | 71.9% | — | — |
+| Llama3.2V-11B | 91.8% | 72.9% | — | — |
+| Qwen2-VL-7B | 92.8% | 73.7% | — | — |
+| PaliGemma2-3B | 88.9% | 70.6% | — | — |
+| Phi-3.5V-4B | 86.8% | 67.1% | — | — |
 
-All models drop ~20–25% from existence to attribute/relation. H_total is a weighted harmonic mean that penalises dimensional weakness — models that are strong on existence but weak on relations score lower than their POPE rank suggests.
+> Relation column and H_total pending re-evaluation on updated X-POPE relation split (self-reference bug fixed, dataset regenerated).
 
-**X-POPE dataset**: 3,000 existence + 2,200 attribute + 1,403 relation = 6,603 questions total.
+All models drop ~20% from existence to attribute (Welch's t-test p < 0.001 for all models). Attribute → relation gap is significant for 3/6 models. Jaccard similarity of error sets across models is 0.52 on attribute, indicating systematic difficulty rather than model-specific weaknesses.
+
+**X-POPE dataset**: 3,000 existence + 2,200 attribute + 1,579 relation = 6,779 questions total.
 
 ---
 
@@ -123,9 +125,11 @@ beyond-pope/
 │   │   └── __init__.py
 │   │
 │   ├── analysis/            Statistical analysis
-│   │   ├── ranking_shift.py Spearman rho across POPE → RePOPE → DASH-B
-│   │   ├── bias_analysis.py Yes-bias distribution per model and benchmark
-│   │   ├── saturation_diag.py CV saturation diagnostics
+│   │   ├── saturation_diag.py    CV saturation diagnostics + model group breakdown
+│   │   ├── ranking_shift.py      Spearman rho across POPE → RePOPE → DASH-B
+│   │   ├── bias_analysis.py      Yes-bias distribution per model and benchmark
+│   │   ├── significance_tests.py McNemar + Welch t-test + Bootstrap CI
+│   │   ├── error_analysis.py     FP/FN breakdown + confused classes + hard samples
 │   │   └── __init__.py
 │   │
 │   └── viz/                 Visualizations
@@ -139,7 +143,7 @@ beyond-pope/
 │   ├── run_module1.sh       POPE saturation + yes-bias
 │   ├── run_module2.sh       RePOPE ranking shift
 │   ├── run_module3.sh       DASH-B discriminability recovery
-│   └── run_module4.sh       X-POPE three-dimension evaluation
+│   └── run_module4.sh       X-POPE + H_total
 │
 ├── data/
 │   ├── raw/
@@ -208,7 +212,6 @@ wget -P data/raw/benchmarks/repope \
     https://raw.githubusercontent.com/YanNeu/RePOPE/main/annotations/coco_repope_popular.json \
     https://raw.githubusercontent.com/YanNeu/RePOPE/main/annotations/coco_repope_adversarial.json
 
-# Convert to JSONL format
 python -c "
 import json
 from pathlib import Path
@@ -230,7 +233,6 @@ python -c "
 from datasets import load_dataset
 import json
 from pathlib import Path
-from PIL import Image as PILImage
 
 ds = load_dataset('YanNeu/DASH-B')['test']
 img_root = Path('data/raw/benchmarks/dashb/images')
@@ -266,7 +268,6 @@ wget -O image_data.json.zip https://homes.cs.washington.edu/~ranjay/visualgenome
 python -c "import zipfile,glob; [zipfile.ZipFile(f).extractall('.') for f in glob.glob('*.zip')]"
 cd ../../..
 
-# Build X-POPE splits
 python -m src.dataset.build_xpope \
     --vg-dir data/raw/visual_genome \
     --coco-dir data/raw/coco \
@@ -303,6 +304,28 @@ python -m src.viz.run_viz \
     --out figures
 ```
 
+### Statistical analysis
+
+```bash
+# Saturation diagnostics with model group breakdown
+python -m src.analysis.saturation_diag \
+    --results-dir results/predictions \
+    --benchmarks pope_adversarial pope_popular pope_random dashb \
+    --model-groups "7B+:qwen2vl_7b,internvl2_8b,llava_ov_7b,llama32v_11b" \
+                   "all:qwen2vl_7b,internvl2_8b,llava_ov_7b,llama32v_11b,paligemma2_3b,phi35v_4b" \
+    --output reports/module1_saturation.json
+
+# Statistical significance tests
+python -m src.analysis.significance_tests \
+    --results-dir results/predictions \
+    --output reports/significance.json
+
+# Error analysis
+python -m src.analysis.error_analysis \
+    --results-dir results/predictions \
+    --output reports/error_analysis.json
+```
+
 ---
 
 ## Evaluation API
@@ -329,7 +352,9 @@ reports = batch_evaluate("results/predictions/")
 
 **H_total**: weighted harmonic mean of existence / attribute / relation accuracy. The harmonic mean penalises dimensional weakness heavily — a model that excels at existence but fails at relations scores lower than its POPE rank suggests. Missing dimensions are dropped and weights re-normalised automatically.
 
-**CV as saturation metric**: coefficient of variation (std / mean) across model scores on the same benchmark. CV ≤ 0.02 → saturated (models indistinguishable). POPE adversarial CV = 0.159 overall; 0.026 for 7B+ models only.
+**CV as saturation metric**: coefficient of variation (std / mean) across model scores on the same benchmark. CV ≤ 0.02 → saturated (models indistinguishable). Analysis is performed separately for 7B+ models and all models, since including smaller models (3B/4B) inflates variance and masks saturation of larger models.
+
+**X-POPE negative sampling**: three complementary strategies — reversed relations (Type A), same-image wrong pairs (Type B), and cross-image object substitution (Type C). All strategies filter out self-referential questions (subject = object class).
 
 ---
 
