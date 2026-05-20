@@ -1,0 +1,11 @@
+{
+  "model": "phi35v_4b",
+  "benchmark": "xpope_relation",
+  "n_total": 1579,
+  "n_valid": 1579,
+  "n_unknown": 0,
+  "accuracy": 0.632,
+  "yes_rate": 0.8556,
+  "latency_mean_ms": 537.5,
+  "wall_time_s": 988.0
+}

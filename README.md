@@ -79,14 +79,12 @@ X-POPE is an original dataset constructed from COCO val2014 + Visual Genome, ext
 
 | Model | Existence | Attribute | Relation | **H_total** |
 |---|---|---|---|---|
-| LLaVA-OV-7B | 94.8% | 74.5% | — | — |
-| InternVL2-8B | 94.9% | 71.9% | — | — |
-| Llama3.2V-11B | 91.8% | 72.9% | — | — |
-| Qwen2-VL-7B | 92.8% | 73.7% | — | — |
-| PaliGemma2-3B | 88.9% | 70.6% | — | — |
-| Phi-3.5V-4B | 86.8% | 67.1% | — | — |
-
-> Relation column and H_total pending re-evaluation on updated X-POPE relation split (self-reference bug fixed, dataset regenerated).
+| InternVL2-8B | 94.9% | 71.9% | **79.6%** | **0.811** |
+| LLaVA-OV-7B | 94.8% | 74.5% | 76.3% | **0.809** |
+| Qwen2-VL-7B | 92.8% | 73.7% | 75.4% | **0.798** |
+| Llama3.2V-11B | 91.8% | 72.9% | 75.3% | **0.792** |
+| PaliGemma2-3B | 88.9% | 70.6% | 72.1% | **0.764** |
+| Phi-3.5V-4B | 86.8% | 67.1% | 66.0% | **0.722** |
 
 All models drop ~20% from existence to attribute (Welch's t-test p < 0.001 for all models). Attribute → relation gap is significant for 3/6 models. Jaccard similarity of error sets across models is 0.52 on attribute, indicating systematic difficulty rather than model-specific weaknesses.
 

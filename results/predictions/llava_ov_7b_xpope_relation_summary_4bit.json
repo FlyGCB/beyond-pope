@@ -1,0 +1,11 @@
+{
+  "model": "llava_ov_7b",
+  "benchmark": "xpope_relation",
+  "n_total": 1579,
+  "n_valid": 1579,
+  "n_unknown": 0,
+  "accuracy": 0.7631,
+  "yes_rate": 0.589,
+  "latency_mean_ms": 469.4,
+  "wall_time_s": 1886.2
+}
